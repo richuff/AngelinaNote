@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Angelina Note</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <button class="brand" id="homeButton" aria-label="返回年度首页">
+        <span class="brand-mark">A</span>
+        <span><b>Angelina</b><small>NOTE ARCHIVE</small></span>
+      </button>
+      <nav class="side-nav" aria-label="主导航">
+        <button class="nav-item active" data-view="home"><i data-lucide="layout-grid"></i><span>年度书架</span></button>
+        <button class="nav-item" data-view="today"><i data-lucide="calendar-heart"></i><span>今天</span></button>
+      </nav>
+      <div class="sidebar-section">
+        <div class="section-label"><span>按标签过滤</span><button id="addTagButton" class="icon-button" title="新建标签"><i data-lucide="plus"></i></button></div>
+        <div id="tagFilters" class="tag-filters"></div>
+      </div>
+      <div class="sidebar-art">
+        <img src="../Angelina/PNG/看书.png" alt="正在看书的 Angelina">
+        <p>把普通的一天<br>也好好收藏起来</p>
+      </div>
+      <div class="sidebar-footer"><span class="status-dot"></span><span id="saveStatus">所有内容已保存</span></div>
+    </aside>
+
+    <main class="main-stage">
+      <section id="homeView" class="view active">
+        <header class="page-header">
+          <div><p class="eyebrow">MY YEARS, MY STORIES</p><h1>年度记事本</h1><p class="page-description">每一年都是一本独一无二的故事集。</p></div>
+          <button id="addYearButton" class="primary-button"><i data-lucide="plus"></i><span>添加年份</span></button>
+        </header>
+        <div class="year-timeline" id="yearGrid"></div>
+      </section>
+
+      <section id="yearView" class="view">
+        <header class="year-header">
+          <button id="backToYears" class="icon-button large" title="返回年度书架"><i data-lucide="arrow-left"></i></button>
+          <div class="year-heading"><p id="yearKicker" class="eyebrow">2026 · ANNUAL NOTES</p><h1 id="yearTitle"></h1><p id="yearSubtitle"></p></div>
+          <button id="editYearButton" class="secondary-button"><i data-lucide="pencil"></i><span>编辑标题</span></button>
+        </header>
+        <div class="year-stats">
+          <div><strong id="writtenDays">0</strong><span>已记录</span></div>
+          <div><strong id="yearProgress">0%</strong><span>年度进度</span></div>
+          <div><strong id="activeFilter">全部</strong><span>当前标签</span></div>
+        </div>
+        <div class="calendar-toolbar">
+          <div id="monthTabs" class="month-tabs"></div>
+          <div class="legend"><span><i class="day-dot has-note"></i>有记录</span><span><i class="day-dot today"></i>今天</span></div>
+        </div>
+        <div id="calendar" class="calendar"></div>
+      </section>
+
+      <section id="editorView" class="view editor-view">
+        <header class="editor-header">
+          <button id="backToYear" class="icon-button large" title="返回日历"><i data-lucide="arrow-left"></i></button>
+          <div><p id="editorYear" class="eyebrow"></p><h1 id="editorDate"></h1></div>
+          <div class="editor-actions"><span id="editorSaveHint">已保存</span><button id="saveButton" class="primary-button"><i data-lucide="save"></i><span>保存</span></button></div>
+        </header>
+        <div class="editor-layout">
+          <article class="paper" id="paper">
+            <div class="paper-meta"><span id="weekdayLabel"></span><select id="moodSelect" aria-label="今天的心情"><option value="sunny">☀ 晴朗</option><option value="happy">☺ 开心</option><option value="calm">☁ 平静</option><option value="tired">☾ 疲惫</option></select></div>
+            <input id="noteTitle" class="note-title" placeholder="给今天起个标题……" maxlength="80">
+            <div class="format-toolbar" aria-label="文字格式">
+              <button data-command="bold" title="加粗"><i data-lucide="bold"></i></button>
+              <button data-command="italic" title="斜体"><i data-lucide="italic"></i></button>
+              <button data-command="underline" title="下划线"><i data-lucide="underline"></i></button>
+              <span class="toolbar-divider"></span>
+              <button data-command="insertUnorderedList" title="无序列表"><i data-lucide="list"></i></button>
+              <button data-command="formatBlock" data-value="blockquote" title="引用"><i data-lucide="quote"></i></button>
+              <select id="fontSelect" aria-label="字体"><option value="">默认字体</option><option value="serif">文艺衬线</option><option value="cursive">手写字体</option><option value="monospace">等宽字体</option></select>
+            </div>
+            <div id="noteContent" class="note-content" contenteditable="true" data-placeholder="今天发生了什么？从这里写下第一句话……"></div>
+            <div id="stickerLayer" class="sticker-layer"></div>
+          </article>
+          <aside class="sticker-panel">
+            <div class="panel-heading"><div><p class="eyebrow">STICKER BOX</p><h2>贴纸收藏盒</h2></div><button id="randomSticker" class="icon-button" title="随机贴一张"><i data-lucide="shuffle"></i></button></div>
+            <p class="panel-note">点击添加，拖动调整位置。选中后可旋转、缩放或删除。</p>
+            <div id="stickerLibrary" class="sticker-library"></div>
+            <div id="stickerControls" class="sticker-controls disabled">
+              <label>旋转 <input id="rotateSticker" type="range" min="-25" max="25" value="0"></label>
+              <label>大小 <input id="scaleSticker" type="range" min="60" max="150" value="100"></label>
+              <button id="deleteSticker" class="danger-button"><i data-lucide="trash-2"></i><span>移除贴纸</span></button>
+            </div>
+            <div class="tag-editor"><div class="section-label"><span>这一天的标签</span><button id="editorAddTag" class="icon-button" title="新建标签"><i data-lucide="plus"></i></button></div><div id="noteTags" class="note-tags"></div></div>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="yearDialog">
+    <form method="dialog" id="yearForm">
+      <div class="dialog-head"><div><p class="eyebrow">CUSTOMIZE YEAR</p><h2>编辑年度封面</h2></div><button value="cancel" class="icon-button" title="关闭"><i data-lucide="x"></i></button></div>
+      <label>年份<input id="yearInput" type="number" min="1900" max="2200" required></label>
+      <label>年度标题<input id="yearTitleInput" maxlength="40" placeholder="例如：一往无前"></label>
+      <label>副标题<input id="yearSubtitleInput" maxlength="80" placeholder="例如：我的成长与远行"></label>
+      <div class="dialog-actions"><button value="cancel" class="secondary-button">取消</button><button id="confirmYear" value="default" class="primary-button">保存封面</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="tagDialog">
+    <form method="dialog" id="tagForm">
+      <div class="dialog-head"><div><p class="eyebrow">NEW TAG</p><h2>新建标签</h2></div><button value="cancel" class="icon-button" title="关闭"><i data-lucide="x"></i></button></div>
+      <label>标签名称<input id="tagNameInput" maxlength="16" placeholder="工作、旅行、灵感……" required></label>
+      <label>标签颜色<div class="color-options" id="tagColors"></div></label>
+      <div class="dialog-actions"><button value="cancel" class="secondary-button">取消</button><button id="confirmTag" value="default" class="primary-button">创建标签</button></div>
+    </form>
+  </dialog>
+
+  <script src="../node_modules/lucide/dist/umd/lucide.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

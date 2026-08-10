@@ -1,0 +1,162 @@
+:root {
+  --blue: #1f6fbd;
+  --blue-dark: #174f91;
+  --blue-soft: #dceeff;
+  --coral: #e96560;
+  --yellow: #ffe23b;
+  --ink: #182238;
+  --muted: #69738a;
+  --paper: #fffdf7;
+  --canvas: #f3f0e8;
+  --line: #d9d7d0;
+  --sidebar: 232px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-width: 1000px; min-height: 680px; height: 100%; overflow: hidden; }
+body { color: var(--ink); background: var(--canvas); font-family: "Segoe UI", "Microsoft YaHei", sans-serif; letter-spacing: 0; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.app-shell { display: grid; grid-template-columns: var(--sidebar) 1fr; height: 100vh; }
+.sidebar { position: relative; z-index: 20; display: flex; flex-direction: column; padding: 26px 18px 18px; background: var(--blue); color: white; overflow: hidden; }
+.brand { display: flex; align-items: center; gap: 12px; width: 100%; padding: 0 8px 25px; border: 0; border-bottom: 1px solid rgba(255,255,255,.2); background: transparent; color: white; text-align: left; }
+.brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border: 2px solid white; border-radius: 50%; background: var(--yellow); color: var(--blue-dark); font: 800 21px Georgia, serif; transform: rotate(-7deg); box-shadow: 3px 3px 0 var(--coral); }
+.brand b { display: block; font: 700 20px Georgia, serif; }
+.brand small { display: block; margin-top: 3px; font-size: 9px; letter-spacing: 2px; opacity: .75; }
+.side-nav { display: grid; gap: 6px; margin: 22px 0; }
+.nav-item { display: flex; align-items: center; gap: 12px; width: 100%; height: 44px; padding: 0 13px; border: 0; border-radius: 6px; background: transparent; color: rgba(255,255,255,.76); text-align: left; }
+.nav-item svg { width: 19px; }
+.nav-item:hover, .nav-item.active { background: rgba(255,255,255,.14); color: white; }
+.sidebar-section { border-top: 1px solid rgba(255,255,255,.2); padding-top: 18px; }
+.section-label { display: flex; align-items: center; justify-content: space-between; min-height: 30px; font-size: 12px; font-weight: 700; }
+.sidebar .section-label { color: rgba(255,255,255,.75); }
+.icon-button { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: transparent; }
+.icon-button:hover { background: rgba(31,111,189,.08); }
+.icon-button svg { width: 16px; height: 16px; }
+.sidebar .icon-button { border-color: rgba(255,255,255,.25); color: white; }
+.tag-filters { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.tag-filter { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 5px 9px; border: 1px solid rgba(255,255,255,.18); border-radius: 5px; background: rgba(0,0,0,.08); color: white; font-size: 12px; }
+.tag-filter.active { background: white; color: var(--blue-dark); }
+.tag-color { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.sidebar-art { position: relative; margin: auto -12px 0; min-height: 220px; }
+.sidebar-art img { position: absolute; bottom: 20px; left: -23px; width: 210px; pointer-events: none; filter: drop-shadow(0 8px 8px rgba(9,43,82,.25)); }
+.sidebar-art p { position: absolute; right: 0; top: 32px; z-index: 1; margin: 0; font: 700 13px/1.7 Georgia, "Microsoft YaHei", serif; text-align: right; transform: rotate(4deg); }
+.sidebar-footer { display: flex; align-items: center; gap: 8px; padding: 14px 8px 0; border-top: 1px solid rgba(255,255,255,.2); font-size: 11px; opacity: .76; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #72df87; box-shadow: 0 0 0 3px rgba(114,223,135,.18); }
+
+.main-stage { position: relative; min-width: 0; overflow: hidden; }
+.view { display: none; height: 100%; overflow-y: auto; padding: 44px 52px; }
+.view.active { display: block; }
+.page-header, .year-header, .editor-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.page-header h1, .year-header h1, .editor-header h1 { margin: 3px 0 8px; font: 700 38px/1.1 Georgia, "Microsoft YaHei", serif; }
+.eyebrow { margin: 0; color: var(--blue); font-size: 10px; font-weight: 800; letter-spacing: 2px; }
+.page-description, .year-heading > p:last-child { margin: 0; color: var(--muted); font: 16px Georgia, "Microsoft YaHei", serif; }
+.primary-button, .secondary-button, .danger-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 5px; font-weight: 700; font-size: 13px; }
+.primary-button { border: 1px solid var(--blue); background: var(--blue); color: white; box-shadow: 3px 3px 0 var(--yellow); }
+.primary-button:hover { background: var(--blue-dark); }
+.secondary-button { border: 1px solid #bcc3cf; background: var(--paper); }
+.danger-button { border: 1px solid #efb0ad; background: #fff3f1; color: #b43c37; }
+.primary-button svg, .secondary-button svg, .danger-button svg { width: 16px; }
+
+.year-timeline { position: relative; display: grid; grid-template-columns: repeat(2, minmax(300px, 1fr)); gap: 22px; max-width: 1050px; margin-top: 40px; padding-bottom: 30px; }
+.year-card { position: relative; display: grid; grid-template-columns: 1fr 150px; min-height: 210px; overflow: hidden; padding: 28px; border: 1px solid #cfcfc8; border-radius: 7px; background: var(--paper); text-align: left; box-shadow: 5px 5px 0 rgba(31,111,189,.1); }
+.year-card:nth-child(3n+2) { box-shadow: 5px 5px 0 rgba(233,101,96,.15); }
+.year-card:hover { transform: translateY(-3px); border-color: var(--blue); }
+.year-card .index { font-size: 10px; font-weight: 800; color: var(--coral); letter-spacing: 2px; }
+.year-card h2 { margin: 13px 0 8px; font: 700 34px/1.1 Georgia, "Microsoft YaHei", serif; }
+.year-card p { margin: 0; color: var(--muted); line-height: 1.6; }
+.year-card footer { position: absolute; bottom: 24px; left: 28px; display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--blue); }
+.year-card img { position: absolute; right: -20px; bottom: -22px; width: 190px; filter: drop-shadow(0 8px 8px rgba(24,34,56,.14)); }
+.year-card .tape { position: absolute; top: 11px; right: 118px; width: 52px; height: 17px; background: rgba(255,226,59,.72); transform: rotate(7deg); }
+
+.large { width: 40px; height: 40px; flex: 0 0 auto; }
+.year-header { align-items: center; }
+.year-heading { flex: 1; }
+.year-heading h1 { margin-bottom: 5px; }
+.year-stats { display: flex; gap: 0; margin: 32px 0 26px 64px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.year-stats > div { display: flex; align-items: baseline; gap: 9px; min-width: 160px; padding: 15px 22px; border-right: 1px solid var(--line); }
+.year-stats strong { font: 700 25px Georgia, serif; color: var(--blue); }
+.year-stats span { color: var(--muted); font-size: 11px; }
+.calendar-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.month-tabs { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+.month-tab { flex: 0 0 auto; width: 43px; height: 34px; border: 0; border-bottom: 2px solid transparent; background: transparent; font-size: 12px; color: var(--muted); }
+.month-tab.active { color: var(--blue); border-color: var(--blue); font-weight: 800; }
+.legend { display: flex; gap: 15px; font-size: 11px; color: var(--muted); }
+.legend span { display: flex; align-items: center; gap: 6px; }
+.day-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+.day-dot.today { background: var(--coral); }
+.calendar { border: 1px solid #cbc9c2; background: var(--paper); }
+.calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.calendar-weekdays div { padding: 11px 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 10px; font-weight: 800; text-align: right; }
+.day-cell { position: relative; min-height: 116px; padding: 11px; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: transparent; text-align: left; vertical-align: top; }
+.day-cell:nth-child(7n) { border-right: 0; }
+.day-cell.empty { cursor: default; background: #f4f2ed; }
+.day-cell:not(.empty):hover { background: #f0f7ff; }
+.day-number { float: right; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font: 700 12px Georgia, serif; }
+.day-cell.is-today .day-number { background: var(--coral); color: white; }
+.day-cell.has-entry::before { content: ''; position: absolute; top: 14px; left: 11px; width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+.day-preview { display: -webkit-box; overflow: hidden; margin-top: 34px; color: var(--muted); font: 11px/1.45 Georgia, "Microsoft YaHei", serif; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.day-tags { position: absolute; left: 10px; bottom: 9px; max-width: calc(100% - 20px); overflow: hidden; color: var(--blue); font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
+
+.editor-view { padding: 30px 40px 36px; overflow: hidden; }
+.editor-header { align-items: center; height: 66px; }
+.editor-header h1 { margin: 2px 0 0; font-size: 27px; }
+.editor-actions { display: flex; align-items: center; gap: 14px; }
+.editor-actions > span { color: var(--muted); font-size: 11px; }
+.editor-layout { display: grid; grid-template-columns: minmax(570px, 820px) 260px; justify-content: center; gap: 24px; height: calc(100vh - 132px); margin-top: 10px; }
+.paper { position: relative; min-width: 0; overflow: hidden; padding: 34px 48px 40px; border: 1px solid #d3d0c6; background-color: var(--paper); background-image: linear-gradient(#e8e5dd 1px, transparent 1px); background-size: 100% 31px; box-shadow: 8px 8px 0 rgba(31,111,189,.11); }
+.paper::before { content: ''; position: absolute; top: 0; bottom: 0; left: 30px; width: 1px; background: rgba(233,101,96,.3); }
+.paper-meta { position: relative; z-index: 3; display: flex; justify-content: space-between; color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: 1px; }
+.paper-meta select { border: 0; background: transparent; font-size: 11px; }
+.note-title { position: relative; z-index: 3; width: 72%; margin: 20px 0 12px; padding: 0 0 10px; border: 0; border-bottom: 2px solid var(--ink); outline: 0; background: transparent; font: 700 30px Georgia, "Microsoft YaHei", serif; }
+.format-toolbar { position: relative; z-index: 5; display: flex; align-items: center; gap: 3px; width: max-content; max-width: 100%; padding: 5px; border: 1px solid #d7d4cb; border-radius: 5px; background: rgba(255,253,247,.94); }
+.format-toolbar button { display: grid; place-items: center; width: 30px; height: 28px; padding: 0; border: 0; border-radius: 3px; background: transparent; }
+.format-toolbar button:hover { background: var(--blue-soft); }
+.format-toolbar svg { width: 15px; }
+.format-toolbar select { height: 28px; border: 0; background: transparent; font-size: 11px; }
+.toolbar-divider { width: 1px; height: 18px; background: var(--line); }
+.note-content { position: relative; z-index: 2; height: calc(100% - 145px); margin-top: 13px; padding-right: 4px; overflow-y: auto; outline: 0; font: 16px/31px Georgia, "Microsoft YaHei", serif; }
+.note-content:empty::before { content: attr(data-placeholder); color: #a5a6aa; }
+.note-content blockquote { margin: 12px 0; padding-left: 16px; border-left: 3px solid var(--coral); color: var(--blue-dark); }
+.sticker-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.placed-sticker { position: absolute; width: 120px; height: 120px; object-fit: contain; cursor: grab; pointer-events: auto; user-select: none; filter: drop-shadow(0 5px 4px rgba(24,34,56,.15)); }
+.placed-sticker.selected { outline: 2px dashed var(--blue); outline-offset: 4px; }
+.sticker-panel { overflow-y: auto; padding: 20px; border: 1px solid #d3d0c6; background: #fffdf8; }
+.panel-heading { display: flex; align-items: flex-start; justify-content: space-between; }
+.panel-heading h2 { margin: 4px 0; font: 700 20px Georgia, "Microsoft YaHei", serif; }
+.panel-note { margin: 5px 0 16px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.sticker-library { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.sticker-option { aspect-ratio: 1; padding: 3px; overflow: hidden; border: 1px solid #ddd9cf; border-radius: 5px; background: white; }
+.sticker-option:hover { border-color: var(--blue); background: var(--blue-soft); }
+.sticker-option img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.sticker-controls { display: grid; gap: 12px; margin-top: 18px; padding-top: 17px; border-top: 1px solid var(--line); }
+.sticker-controls.disabled { opacity: .35; pointer-events: none; }
+.sticker-controls label { display: grid; grid-template-columns: 42px 1fr; align-items: center; font-size: 11px; font-weight: 700; }
+.sticker-controls input { accent-color: var(--blue); }
+.tag-editor { margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--line); }
+.note-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+.note-tag { position: relative; }
+.note-tag input { position: absolute; opacity: 0; }
+.note-tag span { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #d5d3cc; border-radius: 4px; color: var(--muted); font-size: 11px; cursor: pointer; }
+.note-tag input:checked + span { border-color: var(--blue); background: var(--blue-soft); color: var(--blue-dark); font-weight: 700; }
+
+dialog { width: 430px; padding: 0; border: 1px solid #bfc4cc; border-radius: 7px; background: var(--paper); box-shadow: 12px 12px 0 rgba(31,111,189,.2); }
+dialog::backdrop { background: rgba(18,31,52,.45); backdrop-filter: blur(2px); }
+dialog form { display: grid; gap: 16px; padding: 26px; }
+.dialog-head { display: flex; justify-content: space-between; }
+.dialog-head h2 { margin: 4px 0 0; font: 700 24px Georgia, "Microsoft YaHei", serif; }
+dialog label { display: grid; gap: 7px; color: var(--muted); font-size: 11px; font-weight: 700; }
+dialog input { width: 100%; height: 42px; padding: 0 12px; border: 1px solid #c9c9c3; border-radius: 4px; background: white; outline: 0; }
+dialog input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 5px; }
+.color-options { display: flex; gap: 10px; }
+.color-choice { width: 29px; height: 29px; padding: 0; border: 3px solid var(--paper); border-radius: 50%; box-shadow: 0 0 0 1px #bbb; }
+.color-choice.active { box-shadow: 0 0 0 2px var(--ink); }
+
+@media (max-width: 1150px) {
+  :root { --sidebar: 210px; }
+  .view { padding-left: 34px; padding-right: 34px; }
+  .year-timeline { grid-template-columns: 1fr; }
+  .editor-layout { grid-template-columns: minmax(550px, 1fr) 235px; }
+  .paper { padding-left: 40px; padding-right: 36px; }
+}
