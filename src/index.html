@@ -15,22 +15,25 @@
         <span><b>Angelina</b><small>NOTE ARCHIVE</small></span>
       </button>
       <nav class="side-nav" aria-label="主导航">
-        <button class="nav-item active" data-view="home"><i data-lucide="layout-grid"></i><span>年度书架</span></button>
-        <button class="nav-item" data-view="today"><i data-lucide="calendar-heart"></i><span>今天</span></button>
+        <button class="nav-item active" data-view="home" title="年度书架"><i data-lucide="layout-grid"></i><span>年度书架</span></button>
+        <button class="nav-item" data-view="today" title="今天"><i data-lucide="calendar-heart"></i><span>今天</span></button>
+        <button class="nav-item" data-view="settings" title="设置"><i data-lucide="settings-2"></i><span>设置</span></button>
       </nav>
-      <div class="sidebar-section">
-        <div class="section-label"><span>按标签过滤</span><button id="addTagButton" class="icon-button" title="新建标签"><i data-lucide="plus"></i></button></div>
-        <div id="tagFilters" class="tag-filters"></div>
-      </div>
       <div class="sidebar-art">
         <img src="../Angelina/PNG/看书.png" alt="正在看书的 Angelina">
         <p>把普通的一天<br>也好好收藏起来</p>
       </div>
-      <div class="sidebar-footer"><span class="status-dot"></span><span id="saveStatus">所有内容已保存</span></div>
+      <div class="sidebar-bottom">
+        <div class="sidebar-footer"><span class="status-dot"></span><span id="saveStatus">所有内容已保存</span></div>
+        <button id="sidebarCollapse" class="sidebar-collapse" title="收起侧栏" aria-label="收起侧栏"><i data-lucide="panel-left-close"></i></button>
+      </div>
     </aside>
 
     <main class="main-stage">
       <section id="homeView" class="view active">
+        <img class="page-decoration home-decoration" src="../Angelina/UI素材/16.png" alt="">
+        <img class="page-decoration home-flower-decoration" src="../Angelina/UI素材/24.png" alt="">
+        <img class="page-decoration home-star-decoration" src="../Angelina/UI素材/27.png" alt="">
         <header class="page-header">
           <div><p class="eyebrow">MY YEARS, MY STORIES</p><h1>年度记事本</h1><p class="page-description">每一年都是一本独一无二的故事集。</p></div>
           <button id="addYearButton" class="primary-button"><i data-lucide="plus"></i><span>添加年份</span></button>
@@ -38,17 +41,51 @@
         <div class="year-timeline" id="yearGrid"></div>
       </section>
 
+      <section id="yearCoverView" class="view year-cover-view">
+        <button id="coverBackButton" class="cover-back icon-button large" title="返回年度书架"><i data-lucide="arrow-left"></i></button>
+        <button id="yearCoverSurface" class="year-cover-surface" aria-label="打开年度月份">
+          <span class="cover-sun"></span>
+          <span class="cover-star cover-star-one">✦</span>
+          <span class="cover-star cover-star-two">✧</span>
+          <span class="cover-star cover-star-three">✦</span>
+          <img class="cover-title-art" src="../Angelina/UI素材/year-cover-title.png" alt="直到此地变成无垠之境">
+          <div class="cover-year-copy"><span id="coverYearNumber"></span><strong id="coverYearTitle"></strong><small id="coverYearSubtitle"></small></div>
+          <img class="cover-character" src="../Angelina/PNG/纸飞机.png" alt="Angelina 纸飞机贴纸">
+          <span class="cover-open"><i data-lucide="arrow-right"></i></span>
+        </button>
+      </section>
+
+      <section id="yearOverviewView" class="view year-overview-view">
+        <img class="page-decoration overview-decoration" src="../Angelina/UI素材/23.png" alt="">
+        <img class="page-decoration overview-rabbit-decoration" src="../Angelina/UI素材/17.png" alt="">
+        <header class="year-header overview-header">
+          <button id="overviewBackButton" class="icon-button large" title="返回年度书架"><i data-lucide="arrow-left"></i></button>
+          <div class="year-heading">
+            <p id="overviewKicker" class="eyebrow"></p>
+            <h1 id="overviewYearTitle"></h1>
+            <div class="year-subline"><p id="overviewYearSubtitle"></p><span><strong id="overviewWrittenDays">0</strong> 已记录</span></div>
+          </div>
+          <button id="overviewEditYear" class="secondary-button"><i data-lucide="pencil"></i><span>编辑标题</span></button>
+        </header>
+        <div class="overview-controls">
+          <div><p class="control-label">选择月份</p><div id="overviewMonthFilters" class="overview-months"></div></div>
+          <div><p class="control-label">按标签</p><div id="overviewTagFilters" class="overview-tags"></div></div>
+        </div>
+        <div class="journal-heading"><div><p class="eyebrow">DAILY ARCHIVE</p><h2>每一天的日志</h2></div><span id="journalResultCount"></span></div>
+        <div id="journalStream" class="journal-stream"></div>
+      </section>
+
       <section id="yearView" class="view">
+        <img class="page-decoration calendar-decoration" src="../Angelina/UI素材/20.png" alt="">
         <header class="year-header">
-          <button id="backToYears" class="icon-button large" title="返回年度书架"><i data-lucide="arrow-left"></i></button>
-          <div class="year-heading"><p id="yearKicker" class="eyebrow">2026 · ANNUAL NOTES</p><h1 id="yearTitle"></h1><p id="yearSubtitle"></p></div>
+          <button id="backToYears" class="icon-button large" title="返回年度日志"><i data-lucide="arrow-left"></i></button>
+          <div class="year-heading">
+            <p id="yearKicker" class="eyebrow">2026 · ANNUAL NOTES</p>
+            <h1 id="yearTitle"></h1>
+            <div class="year-subline"><p id="yearSubtitle"></p><span><strong id="writtenDays">0</strong> 已记录</span></div>
+          </div>
           <button id="editYearButton" class="secondary-button"><i data-lucide="pencil"></i><span>编辑标题</span></button>
         </header>
-        <div class="year-stats">
-          <div><strong id="writtenDays">0</strong><span>已记录</span></div>
-          <div><strong id="yearProgress">0%</strong><span>年度进度</span></div>
-          <div><strong id="activeFilter">全部</strong><span>当前标签</span></div>
-        </div>
         <div class="calendar-toolbar">
           <div id="monthTabs" class="month-tabs"></div>
           <div class="legend"><span><i class="day-dot has-note"></i>有记录</span><span><i class="day-dot today"></i>今天</span></div>
@@ -60,7 +97,11 @@
         <header class="editor-header">
           <button id="backToYear" class="icon-button large" title="返回日历"><i data-lucide="arrow-left"></i></button>
           <div><p id="editorYear" class="eyebrow"></p><h1 id="editorDate"></h1></div>
-          <div class="editor-actions"><span id="editorSaveHint">已保存</span><button id="saveButton" class="primary-button"><i data-lucide="save"></i><span>保存</span></button></div>
+          <div class="editor-actions">
+            <span id="editorSaveHint">已保存</span>
+            <button id="editNoteButton" class="primary-button"><i data-lucide="pencil"></i><span>编辑</span></button>
+            <button id="saveButton" class="primary-button"><i data-lucide="save"></i><span>保存</span></button>
+          </div>
         </header>
         <div class="editor-layout">
           <article class="paper" id="paper">
@@ -87,8 +128,22 @@
               <label>大小 <input id="scaleSticker" type="range" min="60" max="150" value="100"></label>
               <button id="deleteSticker" class="danger-button"><i data-lucide="trash-2"></i><span>移除贴纸</span></button>
             </div>
-            <div class="tag-editor"><div class="section-label"><span>这一天的标签</span><button id="editorAddTag" class="icon-button" title="新建标签"><i data-lucide="plus"></i></button></div><div id="noteTags" class="note-tags"></div></div>
+            <div class="tag-editor"><div class="section-label"><span>选择已有标签</span><button id="editorAddTag" class="icon-button" title="新建标签"><i data-lucide="plus"></i></button></div><div id="noteTags" class="note-tags"></div></div>
           </aside>
+        </div>
+      </section>
+
+      <section id="settingsView" class="view settings-view">
+        <img class="page-decoration settings-decoration" src="../Angelina/UI素材/18.png" alt="">
+        <img class="page-decoration settings-flower-one" src="../Angelina/UI素材/25.png" alt="">
+        <img class="page-decoration settings-flower-two" src="../Angelina/UI素材/26.png" alt="">
+        <header class="page-header"><div><p class="eyebrow">PREFERENCES</p><h1>设置</h1><p class="page-description">调整书写与浏览体验。</p></div></header>
+        <div class="settings-list">
+          <div class="setting-row"><div><strong>自动保存</strong><p>停止输入后自动保存当天内容。</p></div><label class="switch"><input id="autoSaveSetting" type="checkbox"><span></span></label></div>
+          <div class="setting-row"><div><strong>紧凑日历</strong><p>缩小日期单元，单屏显示更多内容。</p></div><label class="switch"><input id="compactCalendarSetting" type="checkbox"><span></span></label></div>
+          <div class="setting-row"><div><strong>正文字号</strong><p>调整每日笔记正文的显示大小。</p></div><div class="range-setting"><input id="fontSizeSetting" type="range" min="14" max="22" step="1"><output id="fontSizeValue">16 px</output></div></div>
+          <div class="setting-row"><div><strong>正文行距</strong><p>调整笔记纸张中的文字间距。</p></div><div class="range-setting"><input id="lineHeightSetting" type="range" min="26" max="40" step="1"><output id="lineHeightValue">31 px</output></div></div>
+          <div class="setting-row"><div><strong>默认折叠侧栏</strong><p>下次启动时使用窄侧栏。</p></div><label class="switch"><input id="collapsedSidebarSetting" type="checkbox"><span></span></label></div>
         </div>
       </section>
     </main>
@@ -96,20 +151,24 @@
 
   <dialog id="yearDialog">
     <form method="dialog" id="yearForm">
-      <div class="dialog-head"><div><p class="eyebrow">CUSTOMIZE YEAR</p><h2>编辑年度封面</h2></div><button value="cancel" class="icon-button" title="关闭"><i data-lucide="x"></i></button></div>
+      <div class="dialog-head"><div><p class="eyebrow">CUSTOMIZE YEAR</p><h2>编辑年度封面</h2></div><button type="button" data-close-dialog="yearDialog" class="icon-button" title="关闭"><i data-lucide="x"></i></button></div>
       <label>年份<input id="yearInput" type="number" min="1900" max="2200" required></label>
       <label>年度标题<input id="yearTitleInput" maxlength="40" placeholder="例如：一往无前"></label>
       <label>副标题<input id="yearSubtitleInput" maxlength="80" placeholder="例如：我的成长与远行"></label>
-      <div class="dialog-actions"><button value="cancel" class="secondary-button">取消</button><button id="confirmYear" value="default" class="primary-button">保存封面</button></div>
+      <label>封面背景
+        <div id="yearCoverPreview" class="year-cover-preview"><span>尚未选择图片</span></div>
+      </label>
+      <div class="cover-image-actions"><button id="pickYearCover" type="button" class="secondary-button"><i data-lucide="image-plus"></i><span>选择图片</span></button><button id="removeYearCover" type="button" class="secondary-button"><i data-lucide="image-off"></i><span>移除图片</span></button></div>
+      <div class="dialog-actions"><button type="button" data-close-dialog="yearDialog" class="secondary-button">取消</button><button id="confirmYear" type="submit" class="primary-button">保存封面</button></div>
     </form>
   </dialog>
 
   <dialog id="tagDialog">
     <form method="dialog" id="tagForm">
-      <div class="dialog-head"><div><p class="eyebrow">NEW TAG</p><h2>新建标签</h2></div><button value="cancel" class="icon-button" title="关闭"><i data-lucide="x"></i></button></div>
+      <div class="dialog-head"><div><p class="eyebrow">NEW TAG</p><h2>新建标签</h2></div><button type="button" data-close-dialog="tagDialog" class="icon-button" title="关闭"><i data-lucide="x"></i></button></div>
       <label>标签名称<input id="tagNameInput" maxlength="16" placeholder="工作、旅行、灵感……" required></label>
       <label>标签颜色<div class="color-options" id="tagColors"></div></label>
-      <div class="dialog-actions"><button value="cancel" class="secondary-button">取消</button><button id="confirmTag" value="default" class="primary-button">创建标签</button></div>
+      <div class="dialog-actions"><button type="button" data-close-dialog="tagDialog" class="secondary-button">取消</button><button id="confirmTag" type="submit" class="primary-button">创建标签</button></div>
     </form>
   </dialog>
 

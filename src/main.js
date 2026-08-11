@@ -1,11 +1,20 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const Database = require('better-sqlite3');
 
 let db;
 
 function initDatabase() {
-  db = new Database(path.join(app.getPath('userData'), 'angelina-note.sqlite'));
+  const configuredDir = process.env.ANGELINA_DATA_DIR;
+  const dataDir = configuredDir
+    ? path.resolve(configuredDir)
+    : app.isPackaged
+      ? app.getPath('userData')
+      : path.join(app.getAppPath(), '.data');
+
+  fs.mkdirSync(dataDir, { recursive: true });
+  db = new Database(path.join(dataDir, 'angelina-note.sqlite'));
   db.pragma('journal_mode = WAL');
   db.exec(`
     CREATE TABLE IF NOT EXISTS years (
@@ -43,6 +52,10 @@ function initDatabase() {
       z_index INTEGER NOT NULL DEFAULT 1
     );
   `);
+  const yearColumns = db.prepare('PRAGMA table_info(years)').all();
+  if (!yearColumns.some(column => column.name === 'cover_image')) {
+    db.exec("ALTER TABLE years ADD COLUMN cover_image TEXT NOT NULL DEFAULT ''");
+  }
 }
 
 function createWindow() {
@@ -65,7 +78,7 @@ function createWindow() {
 
 function registerIpc() {
   ipcMain.handle('years:list', () => db.prepare(`
-    SELECT y.year, y.title, y.subtitle,
+    SELECT y.year, y.title, y.subtitle, y.cover_image,
       COUNT(DISTINCT n.note_date) AS note_count,
       MAX(n.updated_at) AS last_update
     FROM years y LEFT JOIN notes n ON CAST(substr(n.note_date, 1, 4) AS INTEGER) = y.year
@@ -79,9 +92,23 @@ function registerIpc() {
   });
 
   ipcMain.handle('years:save', (_, payload) => {
-    db.prepare('UPDATE years SET title = ?, subtitle = ? WHERE year = ?')
-      .run(payload.title.trim() || String(payload.year), payload.subtitle.trim(), payload.year);
+    db.prepare('UPDATE years SET title = ?, subtitle = ?, cover_image = ? WHERE year = ?')
+      .run(payload.title.trim() || String(payload.year), payload.subtitle.trim(), payload.cover_image || '', payload.year);
     return true;
+  });
+
+  ipcMain.handle('years:pick-cover', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择年度封面图片',
+      properties: ['openFile'],
+      filters: [{ name: '图片', extensions: ['jpg', 'jpeg', 'png', 'webp'] }]
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const source = nativeImage.createFromPath(result.filePaths[0]);
+    if (source.isEmpty()) throw new Error('无法读取所选图片');
+    const size = source.getSize();
+    const cover = size.width > 1800 ? source.resize({ width: 1800, quality: 'good' }) : source;
+    return `data:image/jpeg;base64,${cover.toJPEG(88).toString('base64')}`;
   });
 
   ipcMain.handle('notes:year', (_, { year, tagId }) => {
@@ -134,6 +161,13 @@ function registerIpc() {
   ipcMain.handle('tags:create', (_, tag) => {
     const result = db.prepare('INSERT OR IGNORE INTO tags (name, color) VALUES (?, ?)').run(tag.name.trim(), tag.color);
     return result.changes ? { id: result.lastInsertRowid, ...tag } : db.prepare('SELECT * FROM tags WHERE name = ?').get(tag.name.trim());
+  });
+  ipcMain.handle('tags:delete', (_, tagId) => {
+    db.transaction(() => {
+      db.prepare('DELETE FROM note_tags WHERE tag_id = ?').run(tagId);
+      db.prepare('DELETE FROM tags WHERE id = ?').run(tagId);
+    })();
+    return true;
   });
 }
 
