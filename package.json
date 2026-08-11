@@ -6,13 +6,51 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "build": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win nsis",
+    "dist:portable": "electron-builder --win portable"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
     "lucide": "^0.468.0"
   },
   "devDependencies": {
-    "electron": "31.7.7"
+    "electron": "31.7.7",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.angelina.note",
+    "productName": "Angelina Note",
+    "artifactName": "AngelinaNote-${version}-${arch}.${ext}",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "files": [
+      "src/**/*",
+      "Angelina/PNG/**/*",
+      "Angelina/UI素材/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }

@@ -19,7 +19,17 @@ npm install
 npm start
 ```
 
-数据库文件保存在 Electron 的 `userData` 目录中，文件名为 `angelina-note.sqlite`。
+## 构建
+
+```powershell
+npm run build         # 生成未安装的应用目录
+npm run dist          # 生成 Windows 安装包
+npm run dist:win      # 仅生成 NSIS 安装包
+npm run dist:portable # 生成 Windows 便携版
+```
+
+开发环境的数据库保存在项目 `.data/angelina-note.sqlite`。打包后默认使用 Electron 的
+`userData` 目录，也可以通过 `ANGELINA_DATA_DIR` 环境变量指定其他数据目录。
 
 ## 项目结构
 
