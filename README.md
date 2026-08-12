@@ -39,3 +39,4 @@ npm run dist:portable # 生成 Windows 便携版
 - `src/styles.css`：响应式视觉样式
 - `src/app.js`：日历、编辑器、过滤和贴纸交互
 - `Angelina/`：原始 PNG、GIF 与 UI 素材
+- `Angelina/Fonts/`：可随应用打包的自定义字体资源

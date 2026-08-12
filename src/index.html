@@ -36,7 +36,6 @@
         <img class="page-decoration home-star-decoration" src="../Angelina/UI素材/27.png" alt="">
         <header class="page-header">
           <div><p class="eyebrow">MY YEARS, MY STORIES</p><h1>年度记事本</h1><p class="page-description">每一年都是一本独一无二的故事集。</p></div>
-          <button id="addYearButton" class="primary-button"><i data-lucide="plus"></i><span>添加年份</span></button>
         </header>
         <div class="year-timeline" id="yearGrid"></div>
       </section>
@@ -48,7 +47,7 @@
           <span class="cover-star cover-star-one">✦</span>
           <span class="cover-star cover-star-two">✧</span>
           <span class="cover-star cover-star-three">✦</span>
-          <img class="cover-title-art" src="../Angelina/UI素材/year-cover-title.png" alt="直到此地变成无垠之境">
+          <img id="coverTitleArt" class="cover-title-art" src="../Angelina/UI素材/9-1.png" alt="年度封面中心装饰">
           <div class="cover-year-copy"><span id="coverYearNumber"></span><strong id="coverYearTitle"></strong><small id="coverYearSubtitle"></small></div>
           <img class="cover-character" src="../Angelina/PNG/纸飞机.png" alt="Angelina 纸飞机贴纸">
           <span class="cover-open"><i data-lucide="arrow-right"></i></span>
@@ -105,7 +104,28 @@
         </header>
         <div class="editor-layout">
           <article class="paper" id="paper">
-            <div class="paper-meta"><span id="weekdayLabel"></span><select id="moodSelect" aria-label="今天的心情"><option value="sunny">☀ 晴朗</option><option value="happy">☺ 开心</option><option value="calm">☁ 平静</option><option value="tired">☾ 疲惫</option></select></div>
+            <div class="paper-meta"><span id="weekdayLabel"></span><select id="moodSelect" aria-label="今天的天气和心情">
+              <optgroup label="天气">
+                <option value="sunny">☀ 晴朗</option>
+                <option value="cloudy">☁ 多云</option>
+                <option value="rainy">☂ 下雨</option>
+                <option value="windy">≋ 刮风</option>
+                <option value="snowy">❄ 下雪</option>
+                <option value="stormy">ϟ 雷雨</option>
+              </optgroup>
+              <optgroup label="心情">
+                <option value="happy">☺ 开心</option>
+                <option value="calm">○ 平静</option>
+                <option value="excited">✦ 兴奋</option>
+                <option value="inspired">✎ 有灵感</option>
+                <option value="loved">♥ 喜欢</option>
+                <option value="sleepy">☾ 困倦</option>
+                <option value="tired">◌ 疲惫</option>
+                <option value="anxious">△ 焦虑</option>
+                <option value="sad">◇ 难过</option>
+                <option value="angry">× 生气</option>
+              </optgroup>
+            </select></div>
             <input id="noteTitle" class="note-title" placeholder="给今天起个标题……" maxlength="80">
             <div class="format-toolbar" aria-label="文字格式">
               <button data-command="bold" title="加粗"><i data-lucide="bold"></i></button>
@@ -139,6 +159,8 @@
         <img class="page-decoration settings-flower-two" src="../Angelina/UI素材/26.png" alt="">
         <header class="page-header"><div><p class="eyebrow">PREFERENCES</p><h1>设置</h1><p class="page-description">调整书写与浏览体验。</p></div></header>
         <div class="settings-list">
+          <div class="setting-row"><div><strong>页面主题</strong><p>选择应用的主色与强调色组合。</p></div><div id="themeSetting" class="theme-options"><button type="button" data-theme="blue" class="theme-swatch blue" title="经典蓝" aria-label="经典蓝主题"></button><button type="button" data-theme="forest" class="theme-swatch forest" title="森林绿" aria-label="森林绿主题"></button><button type="button" data-theme="coral" class="theme-swatch coral" title="珊瑚红" aria-label="珊瑚红主题"></button></div></div>
+          <div class="setting-row"><div><strong>页面字体</strong><p>更换界面标题、菜单与正文使用的字体。</p></div><select id="appFontSetting" class="setting-select"><option value="system">系统默认</option><option value="serif">文艺衬线</option><option value="rounded">圆润字体</option><option value="handwritten">手写字体</option></select></div>
           <div class="setting-row"><div><strong>自动保存</strong><p>停止输入后自动保存当天内容。</p></div><label class="switch"><input id="autoSaveSetting" type="checkbox"><span></span></label></div>
           <div class="setting-row"><div><strong>紧凑日历</strong><p>缩小日期单元，单屏显示更多内容。</p></div><label class="switch"><input id="compactCalendarSetting" type="checkbox"><span></span></label></div>
           <div class="setting-row"><div><strong>正文字号</strong><p>调整每日笔记正文的显示大小。</p></div><div class="range-setting"><input id="fontSizeSetting" type="range" min="14" max="22" step="1"><output id="fontSizeValue">16 px</output></div></div>
@@ -152,9 +174,13 @@
   <dialog id="yearDialog">
     <form method="dialog" id="yearForm">
       <div class="dialog-head"><div><p class="eyebrow">CUSTOMIZE YEAR</p><h2>编辑年度封面</h2></div><button type="button" data-close-dialog="yearDialog" class="icon-button" title="关闭"><i data-lucide="x"></i></button></div>
-      <label>年份<input id="yearInput" type="number" min="1900" max="2200" required></label>
+      <input id="yearInput" type="hidden">
       <label>年度标题<input id="yearTitleInput" maxlength="40" placeholder="例如：一往无前"></label>
       <label>副标题<input id="yearSubtitleInput" maxlength="80" placeholder="例如：我的成长与远行"></label>
+      <label>中心图片
+        <div id="yearTitleImagePreview" class="year-cover-preview title-image-preview"></div>
+      </label>
+      <div class="cover-image-actions"><button id="pickYearTitleImage" type="button" class="secondary-button"><i data-lucide="image-plus"></i><span>选择中心图片</span></button><button id="removeYearTitleImage" type="button" class="secondary-button"><i data-lucide="rotate-ccw"></i><span>恢复默认</span></button></div>
       <label>封面背景
         <div id="yearCoverPreview" class="year-cover-preview"><span>尚未选择图片</span></div>
       </label>

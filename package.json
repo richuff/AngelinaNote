@@ -32,6 +32,7 @@
       "src/**/*",
       "Angelina/PNG/**/*",
       "Angelina/UI素材/**/*",
+      "Angelina/Fonts/**/*",
       "package.json",
       "node_modules/**/*"
     ],
