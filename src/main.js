@@ -17,8 +17,7 @@ autoUpdater.logger.transports.file.level = 'info';
 autoUpdater.setFeedURL({
   provider: 'github',
   owner: 'richuff',
-  repo: 'AngelinaNote',
-  host: 'github.ink'
+  repo: 'AngelinaNote'
 });
 
 // 统一推送更新状态给渲染层
@@ -133,6 +132,35 @@ function initDatabase() {
   if (!noteColumns.some(column => column.name === 'is_favorite')) {
     db.exec('ALTER TABLE notes ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0');
   }
+  if (!noteColumns.some(column => column.name === 'deleted_at')) {
+    db.exec('ALTER TABLE notes ADD COLUMN deleted_at TEXT');
+  }
+  db.prepare("DELETE FROM notes WHERE deleted_at IS NOT NULL AND deleted_at < datetime('now', '-30 days')").run();
+  seedInitialData();
+}
+
+function seedInitialData() {
+  if (db.prepare('SELECT COUNT(*) AS count FROM notes').get().count > 0) return;
+  const seedPath = path.join(app.getAppPath(), 'Angelina', 'Data', 'angelina.json');
+  if (!fs.existsSync(seedPath)) return;
+  const backup = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+  if (backup.format !== 'angelina-note-backup' || !Array.isArray(backup.years) ||
+    !Array.isArray(backup.notes) || !Array.isArray(backup.tags) ||
+    !Array.isArray(backup.noteTags) || !Array.isArray(backup.stickers)) {
+    throw new Error('Angelina/Data/angelina.json is not a valid backup file');
+  }
+  db.transaction(() => {
+    const addYear = db.prepare('INSERT OR IGNORE INTO years (year, title, subtitle, cover_image, cover_title_image) VALUES (?, ?, ?, ?, ?)');
+    backup.years.forEach(item => addYear.run(item.year, item.title || String(item.year), item.subtitle || '', item.cover_image || '', item.cover_title_image || ''));
+    const addNote = db.prepare('INSERT OR IGNORE INTO notes (note_date, title, content, mood, updated_at, is_favorite) VALUES (?, ?, ?, ?, ?, ?)');
+    backup.notes.forEach(item => addNote.run(item.note_date, item.title || '', item.content || '', item.mood || 'sunny', item.updated_at || new Date().toISOString(), item.is_favorite ? 1 : 0));
+    const addTag = db.prepare('INSERT OR IGNORE INTO tags (id, name, color) VALUES (?, ?, ?)');
+    backup.tags.forEach(item => addTag.run(item.id, item.name, item.color));
+    const addLink = db.prepare('INSERT OR IGNORE INTO note_tags (note_date, tag_id) VALUES (?, ?)');
+    backup.noteTags.forEach(item => addLink.run(item.note_date, item.tag_id));
+    const addSticker = db.prepare('INSERT OR IGNORE INTO stickers (id, note_date, asset, x, y, rotation, scale, z_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    backup.stickers.forEach(item => addSticker.run(item.id, item.note_date, item.asset, item.x, item.y, item.rotation, item.scale, item.z_index));
+  })();
 }
 
 function createWindow() {
@@ -179,6 +207,7 @@ function listCustomFonts() {
 }
 
 function registerIpc() {
+  ipcMain.handle('app:version', () => app.getVersion());
   // 新增：渲染层触发检查更新
   ipcMain.on('check-update', () => {
     sendUpdateStatus('正在连接服务器检测版本...');
@@ -263,13 +292,13 @@ function registerIpc() {
       FROM notes n
       LEFT JOIN note_tags nt ON nt.note_date = n.note_date
       LEFT JOIN tags t ON t.id = nt.tag_id
-      WHERE substr(n.note_date, 1, 4) = ? ${tagClause}
+      WHERE substr(n.note_date, 1, 4) = ? AND n.deleted_at IS NULL ${tagClause}
       GROUP BY n.note_date ORDER BY n.note_date
     `).all(...params);
   });
 
   ipcMain.handle('notes:get', (_, date) => {
-    const note = db.prepare('SELECT * FROM notes WHERE note_date = ?').get(date) || {
+    const note = db.prepare('SELECT * FROM notes WHERE note_date = ? AND deleted_at IS NULL').get(date) || {
       note_date: date, title: '', content: '', mood: 'sunny', is_favorite: 0, updated_at: null
     };
     note.tags = db.prepare(`SELECT t.* FROM tags t JOIN note_tags nt ON nt.tag_id = t.id WHERE nt.note_date = ?`).all(date);
@@ -282,7 +311,7 @@ function registerIpc() {
       db.prepare(`INSERT INTO notes (note_date, title, content, mood, is_favorite, updated_at)
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(note_date) DO UPDATE SET title=excluded.title, content=excluded.content,
-          mood=excluded.mood, is_favorite=excluded.is_favorite, updated_at=excluded.updated_at`)
+          mood=excluded.mood, is_favorite=excluded.is_favorite, deleted_at=NULL, updated_at=excluded.updated_at`)
         .run(note.note_date, note.title, note.content, note.mood, note.is_favorite ? 1 : 0, new Date().toISOString());
       db.prepare('DELETE FROM note_tags WHERE note_date = ?').run(note.note_date);
       const link = db.prepare('INSERT OR IGNORE INTO note_tags (note_date, tag_id) VALUES (?, ?)');
@@ -296,6 +325,11 @@ function registerIpc() {
     return true;
   });
 
+  ipcMain.handle('notes:delete', (_, date) => {
+    db.prepare("UPDATE notes SET deleted_at = datetime('now') WHERE note_date = ?").run(date);
+    return true;
+  });
+
   ipcMain.handle('notes:set-favorite', (_, { date, favorite }) => {
     db.prepare('UPDATE notes SET is_favorite = ? WHERE note_date = ?').run(favorite ? 1 : 0, date);
     return true;
@@ -305,7 +339,7 @@ function registerIpc() {
     const favoriteClause = favoritesOnly ? 'AND n.is_favorite = 1' : '';
     return db.prepare(`
       SELECT n.note_date FROM notes n
-      WHERE (trim(n.title) <> '' OR trim(n.content) <> ''
+      WHERE n.deleted_at IS NULL AND (trim(n.title) <> '' OR trim(n.content) <> ''
         OR EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_date = n.note_date)
         OR EXISTS (SELECT 1 FROM stickers s WHERE s.note_date = n.note_date))
         ${favoriteClause}
@@ -323,11 +357,11 @@ function registerIpc() {
       FROM notes n
       LEFT JOIN note_tags nt ON nt.note_date = n.note_date
       LEFT JOIN tags t ON t.id = nt.tag_id
-      WHERE n.note_date LIKE ? OR n.title LIKE ? OR n.content LIKE ?
+      WHERE n.deleted_at IS NULL AND (n.note_date LIKE ? OR n.title LIKE ? OR n.content LIKE ?
         OR EXISTS (
           SELECT 1 FROM note_tags snt JOIN tags st ON st.id = snt.tag_id
           WHERE snt.note_date = n.note_date AND st.name LIKE ?
-        )
+        ))
       GROUP BY n.note_date ORDER BY n.note_date DESC
     `).all(pattern, pattern, pattern, pattern);
   });
@@ -338,9 +372,33 @@ function registerIpc() {
     FROM notes n
     LEFT JOIN note_tags nt ON nt.note_date = n.note_date
     LEFT JOIN tags t ON t.id = nt.tag_id
-    WHERE n.is_favorite = 1
+    WHERE n.is_favorite = 1 AND n.deleted_at IS NULL
     GROUP BY n.note_date ORDER BY n.note_date DESC
   `).all());
+
+  ipcMain.handle('notes:trash', () => db.prepare(`
+    SELECT n.note_date, n.title, n.content, n.mood, n.deleted_at,
+      GROUP_CONCAT(t.name, ', ') AS tags
+    FROM notes n
+    LEFT JOIN note_tags nt ON nt.note_date = n.note_date
+    LEFT JOIN tags t ON t.id = nt.tag_id
+    WHERE n.deleted_at IS NOT NULL
+    GROUP BY n.note_date ORDER BY n.deleted_at DESC
+  `).all());
+
+  ipcMain.handle('notes:restore', (_, date) => {
+    db.prepare('UPDATE notes SET deleted_at = NULL WHERE note_date = ?').run(date);
+    return true;
+  });
+
+  ipcMain.handle('notes:purge', (_, date) => {
+    db.transaction(() => {
+      db.prepare('DELETE FROM note_tags WHERE note_date = ?').run(date);
+      db.prepare('DELETE FROM stickers WHERE note_date = ?').run(date);
+      db.prepare('DELETE FROM notes WHERE note_date = ?').run(date);
+    })();
+    return true;
+  });
 
   ipcMain.handle('notes:pick-attachment', async () => {
     const result = await dialog.showOpenDialog({
@@ -354,6 +412,38 @@ function registerIpc() {
     const size = source.getSize();
     const image = size.width > 1600 ? source.resize({ width: 1600, quality: 'good' }) : source;
     return `data:image/png;base64,${image.toPNG().toString('base64')}`;
+  });
+
+  ipcMain.handle('notes:export-pdf', async (_, note) => {
+    const safeTitle = String(note.title || note.note_date || 'Angelina Note').replace(/[\\/:*?"<>|]/g, '-').slice(0, 80);
+    const result = await dialog.showSaveDialog({
+      title: '导出日志 PDF',
+      defaultPath: `${safeTitle}.pdf`,
+      filters: [{ name: 'PDF 文件', extensions: ['pdf'] }]
+    });
+    if (result.canceled || !result.filePath) return null;
+
+    const printWindow = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
+    const escape = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
+    const html = `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><style>
+      @page { size: A4; margin: 18mm 16mm; }
+      body { color: #20242b; font: 15px/1.85 Georgia, "Microsoft YaHei", serif; }
+      header { margin-bottom: 26px; padding-bottom: 14px; border-bottom: 2px solid #1f6fbd; }
+      .date { color: #1f6fbd; font: 700 11px Arial, "Microsoft YaHei", sans-serif; letter-spacing: 1.2px; }
+      h1 { margin: 6px 0 0; font-size: 28px; line-height: 1.25; }
+      .mood { margin-top: 8px; color: #68717e; font: 12px Arial, "Microsoft YaHei", sans-serif; }
+      main img { display: block; max-width: 100%; max-height: 170mm; height: auto; margin: 16px auto; object-fit: contain; }
+      main blockquote { margin: 16px 0; padding-left: 14px; border-left: 3px solid #e96560; color: #455a73; }
+      main { overflow-wrap: anywhere; word-break: break-word; }
+    </style></head><body><header><div class="date">${escape(note.note_date)}</div><h1>${escape(note.title || '无标题日志')}</h1><div class="mood">${escape(note.mood || '')}</div></header><main>${note.content || '<p></p>'}</main></body></html>`;
+    try {
+      await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+      const pdf = await printWindow.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true });
+      fs.writeFileSync(result.filePath, pdf);
+      return result.filePath;
+    } finally {
+      if (!printWindow.isDestroyed()) printWindow.destroy();
+    }
   });
 
   ipcMain.handle('data:export', async () => {

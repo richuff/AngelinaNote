@@ -26,7 +26,7 @@ const COLORS = ['#1f6fbd', '#e96560', '#efb13c', '#53a978', '#8b67b2', '#e47ca4'
 const state = {
   years: [], tags: [], customFonts: [], selectedTag: null, currentYear: null, currentMonth: new Date().getMonth(),
   currentDate: null, yearNotes: [], stickers: [], selectedSticker: null, dirty: false,
-  editing: false, currentFavorite: false, currentHasContent: false, saveTimer: null, currentView: 'home', editorReturnView: 'yearOverview',
+  editing: false, stickerMode: false, currentFavorite: false, currentHasContent: false, saveTimer: null, currentView: 'home', editorReturnView: 'yearOverview',
   pendingYearCover: '', pendingYearTitleImage: '',
   preferences: { theme: 'blue', appFont: 'interfaceHandwritten', autoSave: true, compactCalendar: false, fontSize: 16, lineHeight: 31, collapsedSidebar: false }
 };
@@ -68,10 +68,37 @@ function showView(name) {
   refreshIcons();
 }
 
+function confirmAction({ title, message, confirmLabel = '确定', danger = true, kicker = 'PLEASE CONFIRM' }) {
+  return new Promise(resolve => {
+    const dialog = $('#confirmDialog');
+    const accept = $('#confirmAcceptButton');
+    const cancel = () => { cleanup(); dialog.close(); resolve(false); };
+    const approve = () => { cleanup(); dialog.close(); resolve(true); };
+    const cleanup = () => {
+      accept.removeEventListener('click', approve);
+      $('#confirmCancelButton').removeEventListener('click', cancel);
+      $('#confirmCloseButton').removeEventListener('click', cancel);
+      dialog.removeEventListener('cancel', cancel);
+    };
+    $('#confirmKicker').textContent = kicker;
+    $('#confirmTitle').textContent = title;
+    $('#confirmMessage').textContent = message;
+    accept.textContent = confirmLabel;
+    accept.classList.toggle('is-danger', danger);
+    accept.addEventListener('click', approve);
+    $('#confirmCancelButton').addEventListener('click', cancel);
+    $('#confirmCloseButton').addEventListener('click', cancel);
+    dialog.addEventListener('cancel', cancel, { once: true });
+    dialog.showModal();
+    refreshIcons();
+  });
+}
+
 async function init() {
   try {
     loadPreferences();
     bindEvents();
+    $('#appVersion').textContent = `v${await api.getAppVersion()}`;
     state.customFonts = await api.listCustomFonts();
     await registerCustomFonts();
     populateCustomFontOptions();
@@ -312,6 +339,43 @@ async function loadFavorites() {
   renderArchiveResults('#favoriteResults', notes, '还没有收藏日志');
 }
 
+function daysRemaining(deletedAt) {
+  const elapsed = Date.now() - new Date(`${deletedAt}Z`).getTime();
+  return Math.max(0, 30 - Math.floor(elapsed / 86400000));
+}
+
+async function loadTrash() {
+  const notes = await api.listTrashNotes();
+  $('#trashResultCount').textContent = `${notes.length} 篇日志`;
+  const container = $('#trashResults');
+  if (!notes.length) {
+    container.innerHTML = '<div class="journal-empty"><i data-lucide="trash-2"></i><strong>回收站是空的</strong><p>删除的日志会在这里保留 30 天。</p></div>';
+    refreshIcons();
+    return;
+  }
+  container.innerHTML = notes.map(note => {
+    const date = new Date(`${note.note_date}T12:00:00`);
+    const excerpt = stripHtml(note.content) || '这一天留下了一则记录。';
+    return `<article class="journal-entry trash-entry" data-date="${note.note_date}">
+      <time><strong>${pad(date.getDate())}</strong><span>${pad(date.getMonth() + 1)}月</span><small>${date.getFullYear()}</small></time>
+      <span class="journal-body"><strong>${escapeHtml(note.title || `${date.getMonth() + 1}月${date.getDate()}日`)}</strong><span>${escapeHtml(excerpt)}</span><small>还会保留 ${daysRemaining(note.deleted_at)} 天</small></span>
+      <span class="trash-actions"><button class="icon-button restore-note" title="恢复日志" aria-label="恢复日志"><i data-lucide="rotate-ccw"></i></button><button class="icon-button purge-note" title="永久删除" aria-label="永久删除"><i data-lucide="trash-2"></i></button></span>
+    </article>`;
+  }).join('');
+  $$('.restore-note').forEach(button => button.addEventListener('click', async event => {
+    const date = event.currentTarget.closest('[data-date]').dataset.date;
+    await api.restoreNote(date);
+    await loadTrash();
+  }));
+  $$('.purge-note').forEach(button => button.addEventListener('click', async event => {
+    const date = event.currentTarget.closest('[data-date]').dataset.date;
+    if (!await confirmAction({ title: '永久删除日志？', message: '永久删除后无法恢复日志、标签关联和贴纸。', confirmLabel: '永久删除' })) return;
+    await api.purgeNote(date);
+    await loadTrash();
+  }));
+  refreshIcons();
+}
+
 async function selectTag(value) {
   state.selectedTag = value ? Number(value) : null;
   renderTagFilters();
@@ -376,8 +440,9 @@ function renderCalendar() {
 
 async function openEditor(date, returnView = state.currentView) {
   if (state.dirty) await saveCurrentNote();
-  state.editorReturnView = ['year', 'search', 'favorites'].includes(returnView) ? returnView : 'yearOverview';
+  state.editorReturnView = ['year', 'search', 'favorites', 'trash'].includes(returnView) ? returnView : 'yearOverview';
   state.currentDate = date;
+  state.stickerMode = false;
   const note = await api.getNote(date);
   state.stickers = note.stickers.map(item => ({ ...item }));
   state.selectedSticker = null;
@@ -423,6 +488,7 @@ async function openRandomNote(favoritesOnly = false) {
 
 function setEditorMode(editing) {
   state.editing = editing;
+  if (!editing) state.stickerMode = false;
   $('#editorView').classList.toggle('reading', !editing);
   $('#editorView').classList.toggle('editing', editing);
   $('#noteTitle').readOnly = !editing;
@@ -437,6 +503,7 @@ function setEditorMode(editing) {
     state.selectedSticker = null;
     renderPlacedStickers();
   }
+  updateStickerMode();
 }
 
 function renderStickerLibrary() {
@@ -514,9 +581,25 @@ function updateStickerControls() {
   $('#paper').classList.toggle('sticker-editing', Boolean(sticker));
   $('#stickerControls').classList.toggle('disabled', !sticker);
   if (sticker) {
-    $('#rotateSticker').value = sticker.rotation;
+    const rotation = ((Math.round(sticker.rotation) % 360) + 360) % 360;
+    $('#rotateSticker').value = rotation;
+    $('#rotateStickerValue').textContent = `${rotation}°`;
     $('#scaleSticker').value = Math.round(sticker.scale * 100);
+    $('#scaleStickerValue').textContent = `${Math.round(120 * sticker.scale)} px`;
+  } else {
+    $('#rotateStickerValue').textContent = '0°';
+    $('#scaleStickerValue').textContent = '120 px';
   }
+}
+
+function updateStickerMode() {
+  const enabled = state.editing && state.stickerMode;
+  $('#paper').classList.toggle('sticker-mode', enabled);
+  const button = $('#stickerModeButton');
+  button.classList.toggle('active', enabled);
+  button.setAttribute('aria-pressed', String(enabled));
+  button.title = enabled ? '退出贴纸模式' : '开启贴纸模式';
+  button.setAttribute('aria-label', button.title);
 }
 
 function clearStickerSelection() {
@@ -538,7 +621,7 @@ function renderNoteTags(selectedIds = []) {
     event.stopPropagation();
     const tagId = Number(button.dataset.tagId);
     const tag = state.tags.find(item => item.id === tagId);
-    if (!tag || !window.confirm(`删除“${tag.name}”标签？它会从所有日志中移除。`)) return;
+    if (!tag || !await confirmAction({ title: '删除标签？', message: `“${tag.name}”会从所有日志中移除，此操作无法撤销。`, confirmLabel: '删除标签' })) return;
     const remainingSelected = $$('#noteTags input:checked').map(input => Number(input.value)).filter(id => id !== tagId);
     await api.deleteTag(tagId);
     if (state.selectedTag === tagId) state.selectedTag = null;
@@ -658,6 +741,7 @@ function bindEvents() {
   $('[data-view="today"]').addEventListener('click', async () => { const now = new Date(); state.currentYear = now.getFullYear(); await openEditor(dateKey(now), 'yearOverview'); });
   $('[data-view="search"]').addEventListener('click', async () => { await saveCurrentNote(); showView('search'); $('#searchInput').focus(); });
   $('[data-view="favorites"]').addEventListener('click', async () => { await saveCurrentNote(); showView('favorites'); await loadFavorites(); });
+  $('[data-view="trash"]').addEventListener('click', async () => { await saveCurrentNote(); showView('trash'); await loadTrash(); });
   $('[data-view="settings"]').addEventListener('click', async () => { await saveCurrentNote(); showView('settings'); });
   $('#backToYears').addEventListener('click', async () => { await openYearOverview(state.currentYear); });
   $('#coverBackButton').addEventListener('click', async event => { event.stopPropagation(); await loadYears(); showView('home'); });
@@ -668,6 +752,7 @@ function bindEvents() {
     if (state.editorReturnView === 'year') await openYear(state.currentYear);
     else if (state.editorReturnView === 'search') { showView('search'); await runSearch(); }
     else if (state.editorReturnView === 'favorites') { showView('favorites'); await loadFavorites(); }
+    else if (state.editorReturnView === 'trash') { showView('trash'); await loadTrash(); }
     else await openYearOverview(state.currentYear);
   });
   $('#editYearButton').addEventListener('click', () => openYearDialog(state.currentYear));
@@ -700,6 +785,41 @@ function bindEvents() {
     await api.setNoteFavorite(state.currentDate, state.currentFavorite);
     updateFavoriteButton();
   });
+  $('#moreActionsButton').addEventListener('click', () => {
+    $('#moreActionsMenu').classList.toggle('active');
+  });
+  $('#exportNotePdfButton').addEventListener('click', async () => {
+    if (!state.currentDate) return;
+    await saveCurrentNote();
+    $('#moreActionsMenu').classList.remove('active');
+    try {
+      const filePath = await api.exportNotePdf({
+        note_date: state.currentDate,
+        title: $('#noteTitle').value.trim(),
+        content: $('#noteContent').innerHTML,
+        mood: $('#moodSelect').value
+      });
+      if (filePath) $('#editorSaveHint').textContent = 'PDF 已导出';
+    } catch (error) {
+      window.alert(`导出 PDF 失败：${error.message}`);
+    }
+  });
+  document.addEventListener('click', (event) => {
+    const menu = $('#moreActionsMenu');
+    const button = $('#moreActionsButton');
+    if (menu && button && !menu.contains(event.target) && !button.contains(event.target)) {
+      menu.classList.remove('active');
+    }
+  });
+  $('#deleteNoteButton').addEventListener('click', async () => {
+    if (!state.currentDate) return;
+    if (!await confirmAction({ title: '删除这篇日志？', message: '这篇日志、标签关联和贴纸将被永久移除。', confirmLabel: '删除日志' })) return;
+    $('#moreActionsMenu').classList.remove('active');
+    await api.deleteNote(state.currentDate);
+    const year = Number(state.currentDate.slice(0, 4));
+    state.currentDate = null;
+    await openYearOverview(year);
+  });
   $('#editNoteButton').addEventListener('click', () => {
     setEditorMode(true);
     $('#noteContent').focus();
@@ -707,6 +827,12 @@ function bindEvents() {
   $('#randomSticker').addEventListener('click', () => {
     const assets = allStickerAssets();
     addSticker(assets[Math.floor(Math.random() * assets.length)], true);
+  });
+  $('#stickerModeButton').addEventListener('click', () => {
+    if (!state.editing) return;
+    state.stickerMode = !state.stickerMode;
+    if (!state.stickerMode) clearStickerSelection();
+    updateStickerMode();
   });
   $('#deleteSticker').addEventListener('click', () => {
     state.stickers = state.stickers.filter(item => item.id !== state.selectedSticker);
@@ -791,6 +917,7 @@ function bindEvents() {
   $('#randomFavoriteButton').addEventListener('click', () => openRandomNote(true));
   $('#searchForm').addEventListener('submit', async event => { event.preventDefault(); await runSearch(); });
   $('#refreshFavorites').addEventListener('click', loadFavorites);
+  $('#refreshTrash').addEventListener('click', loadTrash);
   $('#exportDataButton').addEventListener('click', async () => {
     try {
       const filePath = await api.exportData();
@@ -800,7 +927,7 @@ function bindEvents() {
     }
   });
   $('#importDataButton').addEventListener('click', async () => {
-    if (!window.confirm('恢复备份会替换当前全部日志数据。确定继续吗？')) return;
+    if (!await confirmAction({ title: '恢复备份？', message: '恢复将替换当前全部年度、日志、标签、收藏和贴纸数据。建议先导出一份备份。', confirmLabel: '恢复备份' })) return;
     try {
       const filePath = await api.importData();
       if (!filePath) return;
@@ -817,15 +944,26 @@ function bindEvents() {
   });
   // 软件更新检测
   $('#checkUpdateBtn')?.addEventListener('click', () => {
-    if(window.electronAPI?.checkUpdate) window.electronAPI.checkUpdate();
+    const button = $('#checkUpdateBtn');
+    button.classList.add('update-checking');
+    button.disabled = true;
+    button.querySelector('span').textContent = '正在检测…';
+    $('#updateStatusText').textContent = '正在连接服务器检测版本…';
+    api.checkUpdate?.();
   });
   // 接收更新进度回调
-  if(window.electronAPI){
-    window.electronAPI.onUpdateStatus?.((text) => {
+  if(api){
+    api.onUpdateStatus?.((text) => {
       const statusDom = $('#updateStatusText');
       if(statusDom) statusDom.textContent = text;
+      const button = $('#checkUpdateBtn');
+      if (button && !/正在连接|发现新版本|正在下载/.test(text)) {
+        button.classList.remove('update-checking');
+        button.disabled = false;
+        button.querySelector('span').textContent = '检查更新';
+      }
     });
-    window.electronAPI.onDownloadProgress?.((percent) => {
+    api.onDownloadProgress?.((percent) => {
       const statusDom = $('#updateStatusText');
       if(statusDom) statusDom.textContent = `下载进度：${percent}%`;
     });

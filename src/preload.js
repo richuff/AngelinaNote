@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('angelina', {
+  getAppVersion: () => ipcRenderer.invoke('app:version'),
   // 更新相关
   checkUpdate: () => ipcRenderer.send('check-update'),
   onUpdateStatus: (callback) => ipcRenderer.on('update-status', (_, text) => callback(text)),
@@ -16,6 +17,11 @@ contextBridge.exposeInMainWorld('angelina', {
   getYearNotes: (year, tagId) => ipcRenderer.invoke('notes:year', { year, tagId }),
   getNote: date => ipcRenderer.invoke('notes:get', date),
   saveNote: note => ipcRenderer.invoke('notes:save', note),
+  deleteNote: date => ipcRenderer.invoke('notes:delete', date),
+  listTrashNotes: () => ipcRenderer.invoke('notes:trash'),
+  restoreNote: date => ipcRenderer.invoke('notes:restore', date),
+  purgeNote: date => ipcRenderer.invoke('notes:purge', date),
+  exportNotePdf: note => ipcRenderer.invoke('notes:export-pdf', note),
   setNoteFavorite: (date, favorite) => ipcRenderer.invoke('notes:set-favorite', { date, favorite }),
   getRandomNote: favoritesOnly => ipcRenderer.invoke('notes:random', favoritesOnly),
   searchNotes: query => ipcRenderer.invoke('notes:search', query),

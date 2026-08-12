@@ -1,6 +1,6 @@
 {
   "name": "angelina-note",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "richuff",
   "description": "A playful year-by-year diary built with Electron and SQLite.",
   "main": "src/main.js",
@@ -38,6 +38,7 @@
       "Angelina/UI素材/**/*",
       "Angelina/Fonts/**/*",
       "Angelina/Icons/**/*",
+      "Angelina/Data/**/*",
       "package.json",
       "node_modules/**/*"
     ],
