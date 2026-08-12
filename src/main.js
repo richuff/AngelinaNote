@@ -40,6 +40,7 @@ function sendDownloadProgress(percent) {
 
 function updateErrorMessage(error) {
   const message = String(error?.message || error || '未知错误');
+  if (/app-update\.yml|ENOENT.*resources/i.test(message)) return '安装文件不完整：缺少 app-update.yml。请使用 GitHub Release 下载的 AngelinaNote 安装包重新安装，不要直接运行 win-unpacked 目录。';
   if (/latest\.yml|404|Not Found/i.test(message)) return '更新配置未发布：请在 GitHub Release 上传 latest.yml 和对应安装包。';
   if (/net::ERR_|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|timeout|network/i.test(message)) return '更新连接失败：无法访问 GitHub 更新资源，请稍后重试。';
   if (/checksum|sha512|signature|verify/i.test(message)) return '更新包校验失败：请重新下载或重新发布该版本。';
@@ -275,6 +276,11 @@ function registerIpc() {
   ipcMain.on('check-update', async () => {
     if (!app.isPackaged) {
       sendUpdateStatus('开发环境不执行更新检查；请运行打包后的安装版测试。');
+      return;
+    }
+    const updateConfigPath = path.join(process.resourcesPath, 'app-update.yml');
+    if (!fs.existsSync(updateConfigPath)) {
+      sendUpdateStatus('安装文件不完整：缺少更新配置。请重新安装 GitHub Release 中的正式安装包。');
       return;
     }
     if (updateCheckInProgress) return;
