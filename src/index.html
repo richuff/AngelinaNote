@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
   <title>Angelina Note</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -17,6 +17,8 @@
       <nav class="side-nav" aria-label="主导航">
         <button class="nav-item active" data-view="home" title="年度书架"><i data-lucide="layout-grid"></i><span>年度书架</span></button>
         <button class="nav-item" data-view="today" title="今天"><i data-lucide="calendar-heart"></i><span>今天</span></button>
+        <button class="nav-item" data-view="search" title="全文搜索"><i data-lucide="search"></i><span>全文搜索</span></button>
+        <button class="nav-item" data-view="favorites" title="我的收藏"><i data-lucide="star"></i><span>我的收藏</span></button>
         <button class="nav-item" data-view="settings" title="设置"><i data-lucide="settings-2"></i><span>设置</span></button>
       </nav>
       <div class="sidebar-art">
@@ -38,6 +40,23 @@
           <div><p class="eyebrow">MY YEARS, MY STORIES</p><h1>年度记事本</h1><p class="page-description">每一年都是一本独一无二的故事集。</p></div>
         </header>
         <div class="year-timeline" id="yearGrid"></div>
+      </section>
+
+      <section id="searchView" class="view archive-view">
+        <header class="page-header"><div><p class="eyebrow">FIND A MEMORY</p><h1>全文搜索</h1><p class="page-description">按标题、正文、日期或标签查找日志。</p></div></header>
+        <form id="searchForm" class="search-bar">
+          <i data-lucide="search"></i>
+          <input id="searchInput" type="search" placeholder="输入标题、正文、日期或标签" autocomplete="off">
+          <button class="primary-button" type="submit">搜索</button>
+        </form>
+        <div class="journal-heading"><div><p class="eyebrow">SEARCH RESULTS</p><h2>搜索结果</h2></div><span id="searchResultCount">输入关键词开始搜索</span></div>
+        <div id="searchResults" class="journal-stream archive-results"></div>
+      </section>
+
+      <section id="favoritesView" class="view archive-view">
+        <header class="page-header"><div><p class="eyebrow">FAVORITE DAYS</p><h1>我的收藏</h1><p class="page-description">集中翻阅被星标收藏的日子。</p></div><button id="refreshFavorites" class="icon-button large" title="刷新收藏"><i data-lucide="refresh-cw"></i></button></header>
+        <div class="journal-heading"><div><p class="eyebrow">SAVED MEMORIES</p><h2>收藏日志</h2></div><span id="favoriteResultCount"></span></div>
+        <div id="favoriteResults" class="journal-stream archive-results"></div>
       </section>
 
       <section id="yearCoverView" class="view year-cover-view">
@@ -98,6 +117,7 @@
           <div><p id="editorYear" class="eyebrow"></p><h1 id="editorDate"></h1></div>
           <div class="editor-actions">
             <span id="editorSaveHint">已保存</span>
+            <button id="favoriteNoteButton" class="icon-button favorite-button" title="收藏这篇日志" aria-label="收藏这篇日志"><i data-lucide="star"></i></button>
             <button id="editNoteButton" class="primary-button"><i data-lucide="pencil"></i><span>编辑</span></button>
             <button id="saveButton" class="primary-button"><i data-lucide="save"></i><span>保存</span></button>
           </div>
@@ -134,7 +154,8 @@
               <span class="toolbar-divider"></span>
               <button data-command="insertUnorderedList" title="无序列表"><i data-lucide="list"></i></button>
               <button data-command="formatBlock" data-value="blockquote" title="引用"><i data-lucide="quote"></i></button>
-              <select id="fontSelect" aria-label="字体"><option value="">默认字体</option><option value="serif">文艺衬线</option><option value="cursive">手写字体</option><option value="monospace">等宽字体</option></select>
+              <button id="insertNoteImage" type="button" title="插入图片"><i data-lucide="image-plus"></i></button>
+              <select id="fontSelect" aria-label="字体"><option value="">默认字体</option><option value="mixed">中英混排</option><option value="serif">中英衬线</option><option value="handwritten">中英手写</option><option value="monospace">中英等宽</option></select>
             </div>
             <div id="noteContent" class="note-content" contenteditable="true" data-placeholder="今天发生了什么？从这里写下第一句话……"></div>
             <div id="stickerLayer" class="sticker-layer"></div>
@@ -159,8 +180,27 @@
         <img class="page-decoration settings-flower-two" src="../Angelina/UI素材/26.png" alt="">
         <header class="page-header"><div><p class="eyebrow">PREFERENCES</p><h1>设置</h1><p class="page-description">调整书写与浏览体验。</p></div></header>
         <div class="settings-list">
+          <div class="setting-row"><div><strong>随机阅读</strong><p>从已有日志或收藏中随机翻开一天。</p></div><div class="setting-actions"><button id="randomNoteButton" type="button" class="secondary-button"><i data-lucide="shuffle"></i><span>随机日志</span></button><button id="randomFavoriteButton" type="button" class="secondary-button"><i data-lucide="star"></i><span>随机收藏</span></button></div></div>
+          
+          <!-- ========== 新增：软件自动更新区域 ========== -->
+          <div class="setting-row">
+            <div>
+              <strong>软件更新</strong>
+              <p>连接GitHub检测新版本，下载后一键重启安装</p>
+              <small id="updateStatusText">当前已是最新版本</small>
+            </div>
+            <div class="setting-actions">
+              <button id="checkUpdateBtn" type="button" class="secondary-button">
+                <i data-lucide="refresh-cw"></i>
+                <span>检查更新</span>
+              </button>
+            </div>
+          </div>
+          <!-- ========================================== -->
+
+          <div class="setting-row"><div><strong>数据备份与恢复</strong><p>将所有年度、日志、标签、收藏和贴纸导出为 JSON。</p><small id="backupStatus" class="setting-status"></small></div><div class="setting-actions"><button id="exportDataButton" type="button" class="secondary-button"><i data-lucide="download"></i><span>导出备份</span></button><button id="importDataButton" type="button" class="secondary-button"><i data-lucide="upload"></i><span>恢复备份</span></button></div></div>
           <div class="setting-row"><div><strong>页面主题</strong><p>选择应用的主色与强调色组合。</p></div><div id="themeSetting" class="theme-options"><button type="button" data-theme="blue" class="theme-swatch blue" title="经典蓝" aria-label="经典蓝主题"></button><button type="button" data-theme="forest" class="theme-swatch forest" title="森林绿" aria-label="森林绿主题"></button><button type="button" data-theme="coral" class="theme-swatch coral" title="珊瑚红" aria-label="珊瑚红主题"></button></div></div>
-          <div class="setting-row"><div><strong>页面字体</strong><p>更换界面标题、菜单与正文使用的字体。</p></div><select id="appFontSetting" class="setting-select"><option value="system">系统默认</option><option value="serif">文艺衬线</option><option value="rounded">圆润字体</option><option value="handwritten">手写字体</option></select></div>
+          <div class="setting-row"><div><strong>页面字体</strong><p>每种预设会自动搭配西文字体与中文字体，也可以添加字体文件。</p></div><div class="font-setting-actions"><select id="appFontSetting" class="setting-select"><option value="interfaceHandwritten">手写界面（默认）</option><option value="mixed">中英混排</option><option value="system">系统默认</option><option value="serif">中英衬线</option><option value="rounded">中英圆润</option><option value="handwritten">中英手写</option><option value="monospace">中英等宽</option></select><button id="addFontButton" type="button" class="icon-button" title="添加字体文件"><i data-lucide="plus"></i></button></div></div>
           <div class="setting-row"><div><strong>自动保存</strong><p>停止输入后自动保存当天内容。</p></div><label class="switch"><input id="autoSaveSetting" type="checkbox"><span></span></label></div>
           <div class="setting-row"><div><strong>紧凑日历</strong><p>缩小日期单元，单屏显示更多内容。</p></div><label class="switch"><input id="compactCalendarSetting" type="checkbox"><span></span></label></div>
           <div class="setting-row"><div><strong>正文字号</strong><p>调整每日笔记正文的显示大小。</p></div><div class="range-setting"><input id="fontSizeSetting" type="range" min="14" max="22" step="1"><output id="fontSizeValue">16 px</output></div></div>

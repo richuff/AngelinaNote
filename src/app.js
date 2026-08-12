@@ -24,12 +24,14 @@ const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四
 const COLORS = ['#1f6fbd', '#e96560', '#efb13c', '#53a978', '#8b67b2', '#e47ca4'];
 
 const state = {
-  years: [], tags: [], selectedTag: null, currentYear: null, currentMonth: new Date().getMonth(),
+  years: [], tags: [], customFonts: [], selectedTag: null, currentYear: null, currentMonth: new Date().getMonth(),
   currentDate: null, yearNotes: [], stickers: [], selectedSticker: null, dirty: false,
-  editing: false, saveTimer: null, currentView: 'home', editorReturnView: 'yearOverview',
-  pendingYearCover: '',
-  preferences: { autoSave: true, compactCalendar: false, fontSize: 16, lineHeight: 31, collapsedSidebar: false }
+  editing: false, currentFavorite: false, currentHasContent: false, saveTimer: null, currentView: 'home', editorReturnView: 'yearOverview',
+  pendingYearCover: '', pendingYearTitleImage: '',
+  preferences: { theme: 'blue', appFont: 'interfaceHandwritten', autoSave: true, compactCalendar: false, fontSize: 16, lineHeight: 31, collapsedSidebar: false }
 };
+// 新增：保存并发锁，防止重复写入
+let isSaving = false;
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -45,28 +47,59 @@ const allStickerAssets = () => [
   ...UI_STICKERS.map(item => item.asset)
 ];
 
+// 优化lucide：销毁重建，避免图标重复堆积
+function refreshIcons() {
+  if (typeof lucide !== 'undefined') {
+    lucide.destroy();
+    lucide.createIcons();
+  }
+}
+
 function showView(name) {
   state.currentView = name;
   $$('.view').forEach(view => view.classList.toggle('active', view.id === `${name}View`));
   $$('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.view === name));
+  refreshIcons();
 }
 
 async function init() {
-  loadPreferences();
-  bindEvents();
-  const thisYear = new Date().getFullYear();
-  await api.ensureYears([thisYear, thisYear + 1, thisYear + 2]);
-  state.tags = await api.listTags();
-  renderTagFilters();
-  renderStickerLibrary();
-  await loadYears();
-  lucide.createIcons();
+  try {
+    loadPreferences();
+    bindEvents();
+    state.customFonts = await api.listCustomFonts();
+    await registerCustomFonts();
+    populateCustomFontOptions();
+    if (state.preferences.appFont === 'fajardose') {
+      const migratedFont = state.customFonts.find(font => /miss\s*fajardose/i.test(font.name));
+      if (migratedFont) {
+        state.preferences.appFont = `custom:${migratedFont.id}`;
+        localStorage.setItem('angelina-preferences', JSON.stringify(state.preferences));
+      }
+    }
+    applyPreferences();
+    const thisYear = new Date().getFullYear();
+    await api.ensureYears([thisYear]);
+    state.tags = await api.listTags();
+    renderTagFilters();
+    renderStickerLibrary();
+    await loadYears();
+    refreshIcons();
+  } catch (err) {
+    console.error('应用初始化失败', err);
+    alert('程序启动异常：' + err.message);
+    document.body.innerHTML = `<main style="padding:40px;font-family:sans-serif"><h1>应用启动失败</h1><pre>${escapeHtml(err.stack)}</pre></main>`;
+  }
 }
 
 function loadPreferences() {
   try {
     const saved = JSON.parse(localStorage.getItem('angelina-preferences') || '{}');
     state.preferences = { ...state.preferences, ...saved };
+    if (!saved.interfaceHandwrittenDefaultV1) {
+      state.preferences.appFont = 'interfaceHandwritten';
+      state.preferences.interfaceHandwrittenDefaultV1 = true;
+      localStorage.setItem('angelina-preferences', JSON.stringify(state.preferences));
+    }
   } catch (error) {
     console.warn('Unable to read preferences', error);
   }
@@ -80,6 +113,19 @@ function savePreferences() {
 
 function applyPreferences() {
   const root = document.documentElement;
+  const fonts = {
+    interfaceHandwritten: '"Medieval Sharp", KaiTi, STKaiti, "Microsoft YaHei", cursive',
+    mixed: '"Segoe UI", Inter, "Microsoft YaHei UI", "Microsoft YaHei", sans-serif',
+    system: '"Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif',
+    serif: 'Georgia, "Times New Roman", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif',
+    rounded: '"Arial Rounded MT Bold", Nunito, "Microsoft YaHei UI", "Microsoft YaHei", sans-serif',
+    handwritten: '"Segoe Print", "Comic Sans MS", KaiTi, STKaiti, cursive',
+    monospace: 'Consolas, "Cascadia Mono", "Microsoft YaHei UI", "Microsoft YaHei", monospace'
+  };
+  root.dataset.theme = state.preferences.theme;
+  root.dataset.font = state.preferences.appFont;
+  const customFont = state.customFonts.find(font => `custom:${font.id}` === state.preferences.appFont);
+  root.style.setProperty('--app-font', customFont ? `"${customFont.family}", "Microsoft YaHei", sans-serif` : (fonts[state.preferences.appFont] || fonts.mixed));
   root.style.setProperty('--note-font-size', `${state.preferences.fontSize}px`);
   root.style.setProperty('--note-line-height', `${state.preferences.lineHeight}px`);
   $('.app-shell').classList.toggle('sidebar-collapsed', state.preferences.collapsedSidebar);
@@ -91,12 +137,42 @@ function applyPreferences() {
   $('#fontSizeValue').textContent = `${state.preferences.fontSize} px`;
   $('#lineHeightValue').textContent = `${state.preferences.lineHeight} px`;
   $('#collapsedSidebarSetting').checked = state.preferences.collapsedSidebar;
+  $('#appFontSetting').value = state.preferences.appFont;
+  $$('#themeSetting [data-theme]').forEach(button => button.classList.toggle('active', button.dataset.theme === state.preferences.theme));
   $('#sidebarCollapse').innerHTML = state.preferences.collapsedSidebar
     ? '<i data-lucide="panel-left-open"></i>'
     : '<i data-lucide="panel-left-close"></i>';
   $('#sidebarCollapse').title = state.preferences.collapsedSidebar ? '展开侧栏' : '收起侧栏';
   $('#sidebarCollapse').setAttribute('aria-label', $('#sidebarCollapse').title);
-  lucide.createIcons();
+  refreshIcons();
+}
+
+async function registerCustomFonts() {
+  await Promise.all(state.customFonts.map(async font => {
+    font.family = `Angelina Custom ${font.id}`;
+    try {
+      const face = new FontFace(font.family, `url("${font.dataUrl}")`);
+      await face.load();
+      document.fonts.add(face);
+    } catch (error) {
+      console.warn(`Unable to load字体 ${font.fileName}`, error);
+      alert(`字体 ${font.name} 加载失败，将跳过该字体`);
+    }
+  }));
+}
+
+function populateCustomFontOptions() {
+  ['#appFontSetting', '#fontSelect'].forEach(selector => {
+    const select = $(selector);
+    select.querySelectorAll('option[data-custom-font]').forEach(option => option.remove());
+    state.customFonts.filter(font => !/^medieval\s*sharp$/i.test(font.name)).forEach(font => {
+      const option = document.createElement('option');
+      option.value = `custom:${font.id}`;
+      option.textContent = font.name;
+      option.dataset.customFont = 'true';
+      select.append(option);
+    });
+  });
 }
 
 async function loadYears() {
@@ -113,7 +189,7 @@ function renderYears() {
       <footer><i data-lucide="book-open"></i><span>${year.note_count} 篇记录</span><i data-lucide="arrow-up-right"></i></footer>
     </button>`).join('');
   $$('.year-card').forEach(card => card.addEventListener('click', () => openYearCover(Number(card.dataset.year))));
-  lucide.createIcons();
+  refreshIcons();
 }
 
 function openYearCover(year) {
@@ -127,8 +203,8 @@ function openYearCover(year) {
   const surface = $('#yearCoverSurface');
   surface.classList.toggle('custom-cover', Boolean(settings.cover_image));
   surface.style.backgroundImage = settings.cover_image ? `url("${settings.cover_image}")` : '';
+  $('#coverTitleArt').src = settings.cover_title_image || '../Angelina/UI素材/9-1.png';
   showView('yearCover');
-  lucide.createIcons();
 }
 
 async function openYearOverview(year, changeView = true) {
@@ -145,7 +221,6 @@ async function openYearOverview(year, changeView = true) {
   renderOverviewTags();
   renderJournalStream();
   if (changeView) showView('yearOverview');
-  lucide.createIcons();
 }
 
 function renderOverviewMonths() {
@@ -172,7 +247,7 @@ function renderJournalStream() {
   $('#journalResultCount').textContent = `${state.yearNotes.length} 篇日志`;
   if (!state.yearNotes.length) {
     $('#journalStream').innerHTML = `<div class="journal-empty"><i data-lucide="notebook-pen"></i><strong>这一年还没有符合条件的日志</strong><p>从月份日历中选择一天开始记录。</p></div>`;
-    lucide.createIcons();
+    refreshIcons();
     return;
   }
   $('#journalStream').innerHTML = [...state.yearNotes].reverse().map(note => {
@@ -186,7 +261,49 @@ function renderJournalStream() {
     </button>`;
   }).join('');
   $$('.journal-entry').forEach(entry => entry.addEventListener('click', () => openEditor(entry.dataset.date, 'yearOverview')));
-  lucide.createIcons();
+  refreshIcons();
+}
+
+function renderArchiveResults(containerSelector, notes, emptyMessage) {
+  const container = $(containerSelector);
+  if (!notes.length) {
+    container.innerHTML = `<div class="journal-empty"><i data-lucide="book-open"></i><strong>${escapeHtml(emptyMessage)}</strong></div>`;
+    refreshIcons();
+    return;
+  }
+  container.innerHTML = notes.map(note => {
+    const date = new Date(`${note.note_date}T12:00:00`);
+    const excerpt = stripHtml(note.content) || '这一天留下了一则记录。';
+    const tags = note.tags ? note.tags.split(', ').filter(Boolean) : [];
+    return `<button class="journal-entry" data-date="${note.note_date}">
+      <time><strong>${pad(date.getDate())}</strong><span>${pad(date.getMonth() + 1)}月</span><small>${date.getFullYear()} · ${WEEKDAYS[date.getDay()]}</small></time>
+      <span class="journal-body"><strong>${escapeHtml(note.title || `${date.getMonth() + 1}月${date.getDate()}日`)}</strong><span>${escapeHtml(excerpt)}</span><small>${tags.map(tag => `<i>${escapeHtml(tag)}</i>`).join('')}</small></span>
+      <i class="journal-arrow" data-lucide="${note.is_favorite ? 'star' : 'arrow-up-right'}"${note.is_favorite ? ' fill="currentColor"' : ''}></i>
+    </button>`;
+  }).join('');
+  container.querySelectorAll('.journal-entry').forEach(entry => entry.addEventListener('click', () => {
+    state.currentYear = Number(entry.dataset.date.slice(0, 4));
+    openEditor(entry.dataset.date, state.currentView);
+  }));
+  refreshIcons();
+}
+
+async function runSearch() {
+  const query = $('#searchInput').value.trim();
+  if (!query) {
+    $('#searchResultCount').textContent = '输入关键词开始搜索';
+    $('#searchResults').innerHTML = '';
+    return;
+  }
+  const notes = await api.searchNotes(query);
+  $('#searchResultCount').textContent = `${notes.length} 篇日志`;
+  renderArchiveResults('#searchResults', notes, '没有找到匹配的日志');
+}
+
+async function loadFavorites() {
+  const notes = await api.listFavoriteNotes();
+  $('#favoriteResultCount').textContent = `${notes.length} 篇收藏`;
+  renderArchiveResults('#favoriteResults', notes, '还没有收藏日志');
 }
 
 async function selectTag(value) {
@@ -218,7 +335,6 @@ async function openYear(year, changeView = true) {
   renderMonthTabs();
   renderCalendar();
   if (changeView) showView('year');
-  lucide.createIcons();
 }
 
 function renderMonthTabs() {
@@ -254,7 +370,7 @@ function renderCalendar() {
 
 async function openEditor(date, returnView = state.currentView) {
   if (state.dirty) await saveCurrentNote();
-  state.editorReturnView = returnView === 'year' ? 'year' : 'yearOverview';
+  state.editorReturnView = ['year', 'search', 'favorites'].includes(returnView) ? returnView : 'yearOverview';
   state.currentDate = date;
   const note = await api.getNote(date);
   state.stickers = note.stickers.map(item => ({ ...item }));
@@ -266,6 +382,7 @@ async function openEditor(date, returnView = state.currentView) {
   $('#noteTitle').value = note.title;
   $('#noteContent').innerHTML = note.content;
   $('#moodSelect').value = note.mood;
+  state.currentFavorite = Boolean(note.is_favorite);
   renderNoteTags(note.tags.map(tag => tag.id));
   renderPlacedStickers();
   showView('editor');
@@ -273,8 +390,29 @@ async function openEditor(date, returnView = state.currentView) {
   const hasContent = Boolean(
     note.title.trim() || stripHtml(note.content) || note.tags.length || note.stickers.length
   );
+  state.currentHasContent = hasContent;
+  updateFavoriteButton();
   setEditorMode(!hasContent);
-  lucide.createIcons();
+}
+
+function updateFavoriteButton() {
+  const button = $('#favoriteNoteButton');
+  button.disabled = !state.currentHasContent;
+  button.classList.toggle('active', state.currentFavorite);
+  button.title = state.currentFavorite ? '取消收藏' : '收藏这篇日志';
+  button.setAttribute('aria-label', button.title);
+  button.innerHTML = `<i data-lucide="star"${state.currentFavorite ? ' fill="currentColor"' : ''}></i>`;
+  refreshIcons();
+}
+
+async function openRandomNote(favoritesOnly = false) {
+  const note = await api.getRandomNote(favoritesOnly);
+  if (!note) {
+    window.alert(favoritesOnly ? '还没有收藏的日志。' : '还没有可以随机阅读的日志。');
+    return;
+  }
+  state.currentYear = Number(note.note_date.slice(0, 4));
+  await openEditor(note.note_date, 'yearOverview');
 }
 
 function setEditorMode(editing) {
@@ -402,9 +540,9 @@ function renderNoteTags(selectedIds = []) {
     renderNoteTags(remainingSelected);
     renderTagFilters();
     if (state.currentView === 'yearOverview') await openYearOverview(state.currentYear, false);
-    lucide.createIcons();
+    refreshIcons();
   }));
-  lucide.createIcons();
+  refreshIcons();
 }
 
 function setDirty(value) {
@@ -419,20 +557,34 @@ function setDirty(value) {
 }
 
 async function saveCurrentNote() {
-  if (!state.currentDate || !state.dirty) return;
+  if (!state.currentDate || !state.dirty || isSaving) return;
+  isSaving = true;
   clearTimeout(state.saveTimer);
-  $('#editorSaveHint').textContent = '保存中…';
-  await api.saveNote({
-    note_date: state.currentDate,
-    title: $('#noteTitle').value.trim(),
-    content: $('#noteContent').innerHTML,
-    mood: $('#moodSelect').value,
-    tagIds: $$('#noteTags input:checked').map(input => Number(input.value)),
-    stickers: state.stickers
-  });
-  state.dirty = false;
-  $('#editorSaveHint').textContent = '刚刚保存';
-  $('#saveStatus').textContent = '所有内容已保存';
+  try {
+    $('#editorSaveHint').textContent = '保存中…';
+    await api.saveNote({
+      note_date: state.currentDate,
+      title: $('#noteTitle').value.trim(),
+      content: $('#noteContent').innerHTML,
+      mood: $('#moodSelect').value,
+      is_favorite: state.currentFavorite,
+      tagIds: $$('#noteTags input:checked').map(input => Number(input.value)),
+      stickers: state.stickers
+    });
+    state.currentHasContent = Boolean(
+      $('#noteTitle').value.trim() || stripHtml($('#noteContent').innerHTML) ||
+      $$('#noteTags input:checked').length || state.stickers.length
+    );
+    updateFavoriteButton();
+    state.dirty = false;
+    $('#editorSaveHint').textContent = '刚刚保存';
+    $('#saveStatus').textContent = '所有内容已保存';
+  } catch (err) {
+    console.error('保存日志失败', err);
+    alert('保存失败：' + err.message);
+  } finally {
+    isSaving = false;
+  }
 }
 
 function openYearDialog(year = null) {
@@ -442,16 +594,28 @@ function openYearDialog(year = null) {
   $('#yearTitleInput').value = selected?.title || '';
   $('#yearSubtitleInput').value = selected?.subtitle || '';
   state.pendingYearCover = selected?.cover_image || '';
+  state.pendingYearTitleImage = selected?.cover_title_image || '';
   updateYearCoverPreview();
+  updateYearTitleImagePreview();
   $('#yearDialog').showModal();
 }
 
 function updateYearCoverPreview() {
   const preview = $('#yearCoverPreview');
-  preview.classList.toggle('has-image', Boolean(state.pendingYearCover));
-  preview.style.backgroundImage = state.pendingYearCover ? `url("${state.pendingYearCover}")` : '';
-  preview.innerHTML = state.pendingYearCover ? '' : '<span>尚未选择图片</span>';
+  const image = state.pendingYearCover || '../Angelina/BackGround/01.jpg'
+  preview.classList.toggle('has-image');
+  preview.style.backgroundImage = `url("${image}")`;
+  preview.innerHTML = '';
   $('#removeYearCover').disabled = !state.pendingYearCover;
+}
+
+function updateYearTitleImagePreview() {
+  const preview = $('#yearTitleImagePreview');
+  const image = state.pendingYearTitleImage || '../Angelina/UI素材/9-1.png';
+  preview.classList.add('has-image');
+  preview.style.backgroundImage = `url("${image}")`;
+  preview.innerHTML = '';
+  $('#removeYearTitleImage').disabled = !state.pendingYearTitleImage;
 }
 
 function openTagDialog() {
@@ -466,6 +630,14 @@ function openTagDialog() {
 }
 
 function bindEvents() {
+  // 全局指针抬起：终止所有贴纸拖拽，窗口失焦拖拽不会残留
+  document.addEventListener('pointerup', () => {
+    $$('.placed-sticker').forEach(el => {
+      el.onpointermove = null;
+      el.onpointerup = null;
+    })
+  })
+
   document.addEventListener('pointerdown', event => {
     if (event.target.closest('.placed-sticker, #stickerControls')) return;
     clearStickerSelection();
@@ -478,6 +650,8 @@ function bindEvents() {
   $('#homeButton').addEventListener('click', async () => { await saveCurrentNote(); await loadYears(); showView('home'); });
   $('[data-view="home"]').addEventListener('click', async () => { await saveCurrentNote(); await loadYears(); showView('home'); });
   $('[data-view="today"]').addEventListener('click', async () => { const now = new Date(); state.currentYear = now.getFullYear(); await openEditor(dateKey(now), 'yearOverview'); });
+  $('[data-view="search"]').addEventListener('click', async () => { await saveCurrentNote(); showView('search'); $('#searchInput').focus(); });
+  $('[data-view="favorites"]').addEventListener('click', async () => { await saveCurrentNote(); showView('favorites'); await loadFavorites(); });
   $('[data-view="settings"]').addEventListener('click', async () => { await saveCurrentNote(); showView('settings'); });
   $('#backToYears').addEventListener('click', async () => { await openYearOverview(state.currentYear); });
   $('#coverBackButton').addEventListener('click', async event => { event.stopPropagation(); await loadYears(); showView('home'); });
@@ -486,9 +660,10 @@ function bindEvents() {
   $('#backToYear').addEventListener('click', async () => {
     await saveCurrentNote();
     if (state.editorReturnView === 'year') await openYear(state.currentYear);
+    else if (state.editorReturnView === 'search') { showView('search'); await runSearch(); }
+    else if (state.editorReturnView === 'favorites') { showView('favorites'); await loadFavorites(); }
     else await openYearOverview(state.currentYear);
   });
-  $('#addYearButton').addEventListener('click', () => openYearDialog());
   $('#editYearButton').addEventListener('click', () => openYearDialog(state.currentYear));
   $('#overviewEditYear').addEventListener('click', () => openYearDialog(state.currentYear));
   $('#pickYearCover').addEventListener('click', async () => {
@@ -501,8 +676,24 @@ function bindEvents() {
     state.pendingYearCover = '';
     updateYearCoverPreview();
   });
+  $('#pickYearTitleImage').addEventListener('click', async () => {
+    const image = await api.pickYearTitleImage();
+    if (!image) return;
+    state.pendingYearTitleImage = image;
+    updateYearTitleImagePreview();
+  });
+  $('#removeYearTitleImage').addEventListener('click', () => {
+    state.pendingYearTitleImage = '';
+    updateYearTitleImagePreview();
+  });
   $('#editorAddTag').addEventListener('click', openTagDialog);
   $('#saveButton').addEventListener('click', saveCurrentNote);
+  $('#favoriteNoteButton').addEventListener('click', async () => {
+    if (!state.currentDate || !state.currentHasContent) return;
+    state.currentFavorite = !state.currentFavorite;
+    await api.setNoteFavorite(state.currentDate, state.currentFavorite);
+    updateFavoriteButton();
+  });
   $('#editNoteButton').addEventListener('click', () => {
     setEditorMode(true);
     $('#noteContent').focus();
@@ -518,11 +709,56 @@ function bindEvents() {
   $('#rotateSticker').addEventListener('input', event => updateSelectedSticker('rotation', Number(event.target.value)));
   $('#scaleSticker').addEventListener('input', event => updateSelectedSticker('scale', Number(event.target.value) / 100));
   ['#noteTitle', '#noteContent', '#moodSelect'].forEach(selector => $(selector).addEventListener('input', () => setDirty(true)));
+  $('#noteContent').addEventListener('keydown', event => {
+    if (event.key !== 'Tab' || !state.editing) return;
+    event.preventDefault();
+    document.execCommand('insertText', false, '\u3000\u3000');
+    setDirty(true);
+  });
+  // 格式工具栏
   $$('.format-toolbar button[data-command]').forEach(button => button.addEventListener('click', () => {
     if (!state.editing) return;
-    document.execCommand(button.dataset.command, false, button.dataset.value || null); $('#noteContent').focus(); setDirty(true);
+    document.execCommand(button.dataset.command, false, button.dataset.value || null);
+    $('#noteContent').focus();
+    setDirty(true);
   }));
-  $('#fontSelect').addEventListener('change', event => { if (event.target.value) document.execCommand('fontName', false, event.target.value); $('#noteContent').focus(); setDirty(true); });
+  $('#fontSelect').addEventListener('change', event => {
+    const editorFonts = {
+      mixed: 'Segoe UI, Microsoft YaHei UI, Microsoft YaHei',
+      serif: 'Georgia, Times New Roman, Noto Serif SC, Songti SC, SimSun',
+      handwritten: 'Segoe Print, Comic Sans MS, KaiTi, STKaiti',
+      monospace: 'Consolas, Cascadia Mono, Microsoft YaHei UI, Microsoft YaHei'
+    };
+    const customFont = state.customFonts.find(font => `custom:${font.id}` === event.target.value);
+    if (customFont) document.execCommand('fontName', false, `${customFont.family}, Microsoft YaHei`);
+    else if (editorFonts[event.target.value]) document.execCommand('fontName', false, editorFonts[event.target.value]);
+    $('#noteContent').focus();
+    setDirty(true);
+  });
+  // 重构插入图片，移除废弃execCommand
+  $('#insertNoteImage').addEventListener('click', async () => {
+    if (!state.editing) return;
+    const selection = window.getSelection();
+    const savedRange = selection.rangeCount && $('#noteContent').contains(selection.anchorNode)
+      ? selection.getRangeAt(0).cloneRange() : null;
+    const image = await api.pickNoteAttachment();
+    if (!image) return;
+    $('#noteContent').focus();
+    if (savedRange) {
+      selection.removeAllRanges();
+      selection.addRange(savedRange);
+    }
+    const img = document.createElement('img');
+    img.src = image;
+    img.style.maxWidth = "100%";
+    const range = selection.rangeCount ? selection.getRangeAt(0) : document.createRange();
+    range.insertNode(img);
+    range.setStartAfter(img);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    setDirty(true);
+  });
   $('#sidebarCollapse').addEventListener('click', () => {
     state.preferences.collapsedSidebar = !state.preferences.collapsedSidebar;
     savePreferences();
@@ -532,6 +768,62 @@ function bindEvents() {
   $('#fontSizeSetting').addEventListener('input', event => { state.preferences.fontSize = Number(event.target.value); savePreferences(); });
   $('#lineHeightSetting').addEventListener('input', event => { state.preferences.lineHeight = Number(event.target.value); savePreferences(); });
   $('#collapsedSidebarSetting').addEventListener('change', event => { state.preferences.collapsedSidebar = event.target.checked; savePreferences(); });
+  $$('#themeSetting [data-theme]').forEach(button => button.addEventListener('click', () => {
+    state.preferences.theme = button.dataset.theme;
+    savePreferences();
+  }));
+  $('#appFontSetting').addEventListener('change', event => { state.preferences.appFont = event.target.value; savePreferences(); });
+  $('#addFontButton').addEventListener('click', async () => {
+    const fonts = await api.importCustomFont();
+    if (!fonts) return;
+    state.customFonts = fonts;
+    await registerCustomFonts();
+    populateCustomFontOptions();
+    applyPreferences();
+  });
+  $('#randomNoteButton').addEventListener('click', () => openRandomNote(false));
+  $('#randomFavoriteButton').addEventListener('click', () => openRandomNote(true));
+  $('#searchForm').addEventListener('submit', async event => { event.preventDefault(); await runSearch(); });
+  $('#refreshFavorites').addEventListener('click', loadFavorites);
+  $('#exportDataButton').addEventListener('click', async () => {
+    try {
+      const filePath = await api.exportData();
+      if (filePath) $('#backupStatus').textContent = `备份已导出：${filePath}`;
+    } catch (error) {
+      window.alert(`导出失败：${error.message}`);
+    }
+  });
+  $('#importDataButton').addEventListener('click', async () => {
+    if (!window.confirm('恢复备份会替换当前全部日志数据。确定继续吗？')) return;
+    try {
+      const filePath = await api.importData();
+      if (!filePath) return;
+      state.tags = await api.listTags();
+      state.currentDate = null;
+      state.dirty = false;
+      await loadYears();
+      renderTagFilters();
+      showView('home');
+      $('#saveStatus').textContent = '备份恢复完成';
+    } catch (error) {
+      window.alert(`恢复失败：${error.message}`);
+    }
+  });
+  // 软件更新检测
+  $('#checkUpdateBtn')?.addEventListener('click', () => {
+    if(window.electronAPI?.checkUpdate) window.electronAPI.checkUpdate();
+  });
+  // 接收更新进度回调
+  if(window.electronAPI){
+    window.electronAPI.onUpdateStatus?.((text) => {
+      const statusDom = $('#updateStatusText');
+      if(statusDom) statusDom.textContent = text;
+    });
+    window.electronAPI.onDownloadProgress?.((percent) => {
+      const statusDom = $('#updateStatusText');
+      if(statusDom) statusDom.textContent = `下载进度：${percent}%`;
+    });
+  }
   $('#yearForm').addEventListener('submit', async event => {
     event.preventDefault();
     const year = Number($('#yearInput').value);
@@ -540,7 +832,8 @@ function bindEvents() {
       year,
       title: $('#yearTitleInput').value || String(year),
       subtitle: $('#yearSubtitleInput').value,
-      cover_image: state.pendingYearCover
+      cover_image: state.pendingYearCover,
+      cover_title_image: state.pendingYearTitleImage
     });
     $('#yearDialog').close(); await loadYears();
     if (state.currentYear === year && state.currentView === 'yearOverview') await openYearOverview(year);
@@ -559,7 +852,12 @@ function bindEvents() {
   $$('[data-close-dialog]').forEach(button => button.addEventListener('click', () => {
     $(`#${button.dataset.closeDialog}`).close();
   }));
-  window.addEventListener('beforeunload', () => { if (state.dirty) saveCurrentNote(); });
+  window.addEventListener('beforeunload', async (e) => {
+    if (state.dirty) {
+      await saveCurrentNote();
+      e.returnValue = '还有内容未保存，确定关闭吗？';
+    }
+  });
 }
 
 function updateSelectedSticker(key, value) {
@@ -580,7 +878,4 @@ function escapeHtml(value) {
   })[char]);
 }
 
-init().catch(error => {
-  console.error(error);
-  document.body.innerHTML = `<main style="padding:40px;font-family:sans-serif"><h1>应用启动失败</h1><pre>${escapeHtml(error.stack)}</pre></main>`;
-});
+init();
