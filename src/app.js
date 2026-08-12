@@ -48,10 +48,16 @@ const allStickerAssets = () => [
 ];
 
 // 优化lucide：销毁重建，避免图标重复堆积
+let lucideInstance; // 全局存储lucide实例
+
 function refreshIcons() {
   if (typeof lucide !== 'undefined') {
-    lucide.destroy();
-    lucide.createIcons();
+    // 先判断实例存在且拥有销毁方法，再执行销毁
+    if (lucideInstance && typeof lucideInstance.destroy === 'function') {
+      lucideInstance.destroy();
+    }
+    // 重新创建图标实例并保存
+    lucideInstance = lucide.createIcons();
   }
 }
 

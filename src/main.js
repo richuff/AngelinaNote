@@ -16,8 +16,8 @@ autoUpdater.logger.transports.file.level = 'info';
 // GitHub更新源 + 国内镜像加速，规避request timed out
 autoUpdater.setFeedURL({
   provider: 'github',
-  owner: '你的GitHub用户名',
-  repo: '你的仓库名称',
+  owner: 'richuff',
+  repo: 'AngelinaNote',
   host: 'github.ink'
 });
 
