@@ -1,18 +1,18 @@
 const api = window.angelina;
 const CHARACTER_STICKERS = ['坐坐', '拍照', '探险', '海边', '潜水', '看书', '纸飞机', '购物', '送货', '骑行'];
 const UI_STICKERS = [
-  { asset: 'ui:3', label: '海浪徽章' },
-  { asset: 'ui:4', label: '星球徽章' },
-  { asset: 'ui:5', label: '游戏机徽章' },
+  { asset: 'ui:3', label: '沃尔珀徽章1' },
+  { asset: 'ui:4', label: '沃尔珀徽章2' },
+  { asset: 'ui:5', label: '汽车徽章' },
   { asset: 'ui:6', label: '兔子徽章' },
-  { asset: 'ui:7', label: '星星徽章' },
-  { asset: 'ui:9-1', label: '直到此地标题' },
+  { asset: 'ui:7', label: '信封徽章' },
+  { asset: 'ui:9-1', label: '直到大地标题' },
   { asset: 'ui:16', label: '蓝色兔子' },
   { asset: 'ui:17', label: '橙色兔子' },
   { asset: 'ui:18', label: '兔子与花' },
   { asset: 'ui:20', label: '黄色涂鸦' },
   { asset: 'ui:22', label: '彩色星星' },
-  { asset: 'ui:23', label: '篮球星星' },
+  { asset: 'ui:23', label: '酸橙星星' },
   { asset: 'ui:24', label: '绿色花朵' },
   { asset: 'ui:25', label: '粉色花朵' },
   { asset: 'ui:26', label: '黄色花朵' },
@@ -32,6 +32,7 @@ const state = {
 };
 // 新增：保存并发锁，防止重复写入
 let isSaving = false;
+let noteLinkRange = null;
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -98,6 +99,17 @@ async function init() {
   try {
     loadPreferences();
     bindEvents();
+    api.onTrayNavigate?.(async view => {
+      await saveCurrentNote();
+      if (view === 'today') {
+        const now = new Date();
+        state.currentYear = now.getFullYear();
+        await openEditor(dateKey(now), 'yearOverview');
+      } else {
+        await loadYears();
+        showView('home');
+      }
+    });
     $('#appVersion').textContent = `v${await api.getAppVersion()}`;
     state.customFonts = await api.listCustomFonts();
     await registerCustomFonts();
@@ -428,19 +440,45 @@ function renderCalendar() {
   for (let day = 1; day <= days; day++) {
     const key = `${year}-${pad(month + 1)}-${pad(day)}`;
     const note = noteMap.get(key);
-    cells.push(`<button class="day-cell ${note ? 'has-entry' : ''} ${today === key ? 'is-today' : ''}" data-date="${key}">
+    const moodIcon = note ? ({ sunny: '☀', cloudy: '☁', rainy: '☂', windy: '≋', snowy: '❄', stormy: 'ϟ', happy: '☺', calm: '◌', excited: '✦', inspired: '✧', loved: '♥', sleepy: '☾', tired: '◒', anxious: '◒', sad: '◔', angry: '✹' }[note.mood] || '•') : '';
+    cells.push(`<button class="day-cell ${note ? 'has-entry' : ''} ${note?.is_favorite ? 'is-favorite' : ''} ${today === key ? 'is-today' : ''}" data-date="${key}">
       <span class="day-number">${day}</span>
-      ${note ? `<span class="day-preview">${escapeHtml(note.title || stripHtml(note.content) || '这一天有一则记录')}</span><span class="day-tags">${escapeHtml(note.tags || '')}</span>` : ''}
+      ${note ? `<span class="day-indicators"><i>${moodIcon}</i>${note.is_favorite ? '<i data-lucide="star"></i>' : ''}</span><span class="day-preview">${escapeHtml(note.title || stripHtml(note.content) || '这一天有一则记录')}</span><span class="day-tags">${escapeHtml(note.tags || '')}</span>` : ''}
     </button>`);
   }
   while (cells.length % 7) cells.push('<div class="day-cell empty"></div>');
   $('#calendar').innerHTML = `<div class="calendar-weekdays">${['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => `<div>${day}</div>`).join('')}</div><div class="calendar-grid">${cells.join('')}</div>`;
   $$('.day-cell[data-date]').forEach(cell => cell.addEventListener('click', () => openEditor(cell.dataset.date)));
+  refreshIcons();
+}
+
+function textWordCount(value) {
+  const text = stripHtml(value).replace(/\s+/g, ' ').trim();
+  if (!text) return 0;
+  return (text.match(/[\u3400-\u9fff]/g) || []).length + (text.replace(/[\u3400-\u9fff]/g, ' ').match(/[A-Za-z0-9]+/g) || []).length;
+}
+
+function longestStreak(notes) {
+  let longest = 0, current = 0, previous = null;
+  notes.forEach(note => { const date = new Date(`${note.note_date}T12:00:00`); current = previous && (date - previous) === 86400000 ? current + 1 : 1; longest = Math.max(longest, current); previous = date; });
+  return longest;
+}
+
+async function loadStats(year = state.currentYear || new Date().getFullYear()) {
+  const data = await api.getYearStats(year);
+  $('#statsYearSelect').innerHTML = state.years.map(item => `<option value="${item.year}" ${Number(item.year) === Number(year) ? 'selected' : ''}>${item.year}</option>`).join('');
+  const words = data.notes.reduce((sum, note) => sum + textWordCount(`${note.title} ${note.content}`), 0);
+  $('#statsDescription').textContent = `${year} 年，共 ${data.notes.length} 篇可回看的日志。`;
+  $('#statsSummary').innerHTML = `<article><strong>${words.toLocaleString()}</strong><span>年度字数</span></article><article><strong>${longestStreak(data.notes)}</strong><span>最长连续记录</span></article><article><strong>${data.notes.length}</strong><span>记录天数</span></article>`;
+  const moodLabels = { sunny: '晴朗', cloudy: '多云', rainy: '下雨', windy: '刮风', snowy: '下雪', stormy: '雷雨', happy: '开心', calm: '平静', excited: '兴奋', inspired: '有灵感', loved: '喜欢', sleepy: '困倦', tired: '疲惫', anxious: '焦虑', sad: '难过', angry: '生气' };
+  const bars = (items, color) => items.length ? items.map(item => `<div class="stats-bar"><span>${escapeHtml(item.name || moodLabels[item.mood] || item.mood)}</span><i><b style="width:${Math.max(8, item.count / Math.max(...items.map(entry => entry.count)) * 100)}%;background:${item.color || color}"></b></i><em>${item.count}</em></div>`).join('') : '<p class="stats-empty">这一年还没有数据。</p>';
+  $('#statsTags').innerHTML = bars(data.tags, 'var(--blue)');
+  $('#statsMoods').innerHTML = bars(data.moods, 'var(--coral)');
 }
 
 async function openEditor(date, returnView = state.currentView) {
   if (state.dirty) await saveCurrentNote();
-  state.editorReturnView = ['year', 'search', 'favorites', 'trash'].includes(returnView) ? returnView : 'yearOverview';
+  state.editorReturnView = ['year', 'search', 'favorites', 'trash', 'stats'].includes(returnView) ? returnView : 'yearOverview';
   state.currentDate = date;
   state.stickerMode = false;
   const note = await api.getNote(date);
@@ -452,6 +490,7 @@ async function openEditor(date, returnView = state.currentView) {
   $('#weekdayLabel').textContent = `${WEEKDAYS[parsed.getDay()]} / ${date}`;
   $('#noteTitle').value = note.title;
   $('#noteContent').innerHTML = note.content;
+  trimTrailingEmptyBlocks();
   $('#moodSelect').value = note.mood;
   state.currentFavorite = Boolean(note.is_favorite);
   renderNoteTags(note.tags.map(tag => tag.id));
@@ -464,6 +503,55 @@ async function openEditor(date, returnView = state.currentView) {
   state.currentHasContent = hasContent;
   updateFavoriteButton();
   setEditorMode(!hasContent);
+  if (!state.editing) enhanceNoteLinks();
+}
+
+function enhanceNoteLinks() {
+  const content = $('#noteContent');
+  if (!content) return;
+  const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  const replacements = [];
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.parentElement.closest('a, script, style')) continue;
+    if (/\[\[([^\]\n]+)\]\]/.test(node.nodeValue)) replacements.push(node);
+  }
+  replacements.forEach(node => {
+    const fragment = document.createDocumentFragment();
+    const pieces = node.nodeValue.split(/(\[\[[^\]\n]+\]\])/g);
+    pieces.forEach(piece => {
+      const match = piece.match(/^\[\[([^\]\n]+)\]\]$/);
+      if (!match) fragment.append(piece);
+      else {
+        const link = document.createElement('button');
+        link.type = 'button'; link.className = 'note-link'; link.dataset.title = match[1].trim(); link.textContent = match[1].trim();
+        fragment.append(link);
+      }
+    });
+    node.replaceWith(fragment);
+  });
+  $$('.note-link').forEach(link => link.addEventListener('click', async event => {
+    if (state.editing) return;
+    event.preventDefault();
+    const note = await api.getNoteByTitle(link.dataset.title);
+    if (!note) { link.classList.add('missing'); return; }
+    state.currentYear = Number(note.note_date.slice(0, 4));
+    await openEditor(note.note_date, 'yearOverview');
+  }));
+}
+
+function trimTrailingEmptyBlocks() {
+  const content = $('#noteContent');
+  if (!content) return;
+  const isEmpty = node => {
+    if (node.nodeType === Node.TEXT_NODE) return !node.nodeValue.replace(/\u00a0/g, ' ').trim();
+    if (node.nodeType !== Node.ELEMENT_NODE) return false;
+    if (node.matches('img, video, iframe, table, hr')) return false;
+    return !node.textContent.replace(/\u00a0/g, ' ').trim() && !node.querySelector('img, video, iframe, table, hr');
+  };
+  while (content.lastChild && isEmpty(content.lastChild)) content.lastChild.remove();
+  // Browsers often leave several terminal <br> nodes after rich-text editing.
+  while (content.lastElementChild?.tagName === 'BR') content.lastElementChild.remove();
 }
 
 function updateFavoriteButton() {
@@ -488,6 +576,7 @@ async function openRandomNote(favoritesOnly = false) {
 
 function setEditorMode(editing) {
   state.editing = editing;
+  if (editing) restoreNoteLinkTokens();
   if (!editing) state.stickerMode = false;
   $('#editorView').classList.toggle('reading', !editing);
   $('#editorView').classList.toggle('editing', editing);
@@ -497,6 +586,7 @@ function setEditorMode(editing) {
   $('#editNoteButton').hidden = editing;
   $('#saveButton').hidden = !editing;
   $('#editorSaveHint').hidden = !editing;
+  $('#editorView').classList.toggle('no-note-title', !editing && !$('#noteTitle').value.trim());
   $$('.format-toolbar button, .format-toolbar select, #noteTags input, #randomSticker, #editorAddTag')
     .forEach(control => { control.disabled = !editing; });
   if (!editing) {
@@ -509,24 +599,88 @@ function setEditorMode(editing) {
 function renderStickerLibrary() {
   $('#stickerLibrary').innerHTML = `
     <p class="sticker-group-label">人物贴纸</p>
-    ${CHARACTER_STICKERS.map(name => `<button class="sticker-option" data-asset="${name}" title="添加${name}贴纸"><img src="${stickerSrc(name)}" alt="${name}" loading="lazy" decoding="async"></button>`).join('')}
+    ${CHARACTER_STICKERS.map(name => `<button class="sticker-option" data-asset="${name}" title="拖拽${name}贴纸到正文" draggable="true"><img src="${stickerSrc(name)}" alt="${name}" loading="lazy" decoding="async"></button>`).join('')}
     <p class="sticker-group-label">UI 装饰</p>
-    ${UI_STICKERS.map(item => `<button class="sticker-option" data-asset="${item.asset}" title="添加${item.label}"><img src="${stickerSrc(item.asset)}" alt="${item.label}" loading="lazy" decoding="async"></button>`).join('')}`;
-  $$('.sticker-option').forEach(button => button.addEventListener('click', () => addSticker(button.dataset.asset)));
+    ${UI_STICKERS.map(item => `<button class="sticker-option" data-asset="${item.asset}" title="拖拽${item.label}到正文" draggable="true"><img src="${stickerSrc(item.asset)}" alt="${item.label}" loading="lazy" decoding="async"></button>`).join('')}`;
+  $$('.sticker-option').forEach(button => button.addEventListener('dragstart', event => {
+    if (!state.editing) { event.preventDefault(); return; }
+    event.dataTransfer.setData('text/x-angelina-sticker', button.dataset.asset);
+    event.dataTransfer.effectAllowed = 'copy';
+    button.classList.add('dragging');
+  }));
+  $$('.sticker-option').forEach(button => button.addEventListener('dragend', () => button.classList.remove('dragging')));
 }
 
-function addSticker(asset, randomize = false) {
-  const paper = $('#paper');
-  const xRange = Math.max(120, paper.clientWidth - 180);
-  const yRange = Math.max(140, paper.clientHeight - 190);
+function restoreNoteLinkTokens() {
+  $$('.note-link').forEach(link => link.replaceWith(document.createTextNode(`[[${link.dataset.title}]]`)));
+}
+
+function insertNoteLink(title) {
+  const cleanTitle = String(title || '').replace(/[\[\]]/g, '').trim();
+  if (!cleanTitle) return;
+  const content = $('#noteContent');
+  content.focus();
+  const selection = window.getSelection();
+  if (noteLinkRange) {
+    selection.removeAllRanges();
+    selection.addRange(noteLinkRange);
+  }
+  document.execCommand('insertText', false, `[[${cleanTitle}]]`);
+  noteLinkRange = null;
+  setDirty(true);
+}
+
+async function renderNoteLinkResults(query = '') {
+  const notes = await api.listNoteTitles(query);
+  const container = $('#noteLinkResults');
+  container.innerHTML = notes.length ? notes.map(note => `<button type="button" class="note-link-result" data-title="${escapeHtml(note.title)}"><span>${escapeHtml(note.title)}</span><small>${note.note_date}</small></button>`).join('') : '<p class="note-link-empty">没有匹配的日志标题。</p>';
+  $$('.note-link-result').forEach(button => button.addEventListener('click', () => {
+    $('#noteLinkDialog').close();
+    requestAnimationFrame(() => insertNoteLink(button.dataset.title));
+  }));
+}
+
+function openNoteLinkDialog() {
+  const selection = window.getSelection();
+  noteLinkRange = selection.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+  $('#noteLinkSearch').value = '';
+  renderNoteLinkResults();
+  $('#noteLinkDialog').showModal();
+  $('#noteLinkSearch').focus();
+}
+
+async function openHistoryDialog() {
+  const history = await api.listNoteHistory(state.currentDate);
+  const container = $('#historyResults');
+  container.innerHTML = history.length ? history.map(item => `<article class="history-item"><div><strong>${escapeHtml(item.title || '无标题日志')}</strong><small>${new Date(item.snapshot_at).toLocaleString()}</small><p>${escapeHtml(stripHtml(item.content).slice(0, 120) || '空白版本')}</p></div><button type="button" class="secondary-button restore-history" data-id="${item.id}">恢复</button></article>`).join('') : '<p class="note-link-empty">暂时没有历史版本。</p>';
+  $$('.restore-history').forEach(button => button.addEventListener('click', async () => {
+    const restored = await api.restoreNoteHistory(Number(button.dataset.id));
+    if (!restored) return;
+    $('#noteTitle').value = restored.title;
+    $('#noteContent').innerHTML = restored.content;
+    $('#moodSelect').value = restored.mood;
+    state.currentFavorite = Boolean(restored.is_favorite);
+    updateFavoriteButton(); setEditorMode(true); setDirty(true); $('#historyDialog').close();
+  }));
+  $('#historyDialog').showModal();
+  refreshIcons();
+}
+
+function addSticker(asset, randomize = false, position = null) {
+  const noteScroll = $('#noteScroll');
+  const xRange = Math.max(120, noteScroll.clientWidth - 180);
+  const yRange = Math.max(140, Math.max(noteScroll.scrollHeight, noteScroll.clientHeight) - 140);
   const index = state.stickers.length;
   const seeded = (state.currentDate.replaceAll('-', '').split('').reduce((sum, n) => sum + Number(n), 0) * 37 + index * 83) % 997;
   const random = randomize ? Math.random() : seeded / 997;
   state.stickers.push({
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    asset, x: 45 + (random * xRange) % xRange, y: 90 + ((random * 1.73) % 1) * yRange,
+    asset,
+    x: position ? position.x : 30 + (random * xRange) % xRange,
+    y: position ? position.y : 24 + ((random * 1.73) % 1) * yRange,
     rotation: Math.round(-12 + ((random * 2.31) % 1) * 24),
     scale: (asset.startsWith('ui:') ? .72 : .85) + ((random * 3.17) % 1) * .25,
+    opacity: 1,
     z_index: index + 1
   });
   state.selectedSticker = state.stickers.at(-1).id;
@@ -535,9 +689,19 @@ function addSticker(asset, randomize = false) {
   setDirty(true);
 }
 
+function syncStickerLayerSize() {
+  const layer = $('#stickerLayer');
+  const noteScroll = $('#noteScroll');
+  const noteContent = $('#noteContent');
+  if (!layer || !noteScroll || !noteContent) return;
+  layer.style.width = `${noteScroll.clientWidth}px`;
+  layer.style.height = `${Math.max(noteScroll.clientHeight, noteContent.scrollHeight)}px`;
+}
+
 function clampStickerToPaper(sticker) {
   const layer = $('#stickerLayer');
   if (!layer || !sticker) return;
+  syncStickerLayerSize();
   const visualSize = 120 * sticker.scale;
   const rotationPadding = Math.abs(Math.sin(sticker.rotation * Math.PI / 180)) * visualSize * .28;
   const edge = Math.max(72, visualSize + rotationPadding);
@@ -546,7 +710,8 @@ function clampStickerToPaper(sticker) {
 }
 
 function renderPlacedStickers() {
-  $('#stickerLayer').innerHTML = state.stickers.map(sticker => `<img class="placed-sticker ${state.selectedSticker === sticker.id ? 'selected' : ''}" data-id="${sticker.id}" src="${stickerSrc(sticker.asset)}" alt="${stickerLabel(sticker.asset)}贴纸" draggable="false" style="left:${sticker.x}px;top:${sticker.y}px;z-index:${sticker.z_index};transform:rotate(${sticker.rotation}deg) scale(${sticker.scale})">`).join('');
+  syncStickerLayerSize();
+  $('#stickerLayer').innerHTML = state.stickers.map(sticker => `<img class="placed-sticker ${state.selectedSticker === sticker.id ? 'selected' : ''}" data-id="${sticker.id}" src="${stickerSrc(sticker.asset)}" alt="${stickerLabel(sticker.asset)}贴纸" draggable="false" style="left:${sticker.x}px;top:${sticker.y}px;z-index:${sticker.z_index};opacity:${sticker.opacity ?? 1};transform:rotate(${sticker.rotation}deg) scale(${sticker.scale})">`).join('');
   $$('.placed-sticker').forEach(bindStickerDrag);
   updateStickerControls();
 }
@@ -586,9 +751,12 @@ function updateStickerControls() {
     $('#rotateStickerValue').textContent = `${rotation}°`;
     $('#scaleSticker').value = Math.round(sticker.scale * 100);
     $('#scaleStickerValue').textContent = `${Math.round(120 * sticker.scale)} px`;
+    $('#opacitySticker').value = Math.round((sticker.opacity ?? 1) * 100);
+    $('#opacityStickerValue').textContent = `${Math.round((sticker.opacity ?? 1) * 100)}%`;
   } else {
     $('#rotateStickerValue').textContent = '0°';
     $('#scaleStickerValue').textContent = '120 px';
+    $('#opacityStickerValue').textContent = '100%';
   }
 }
 
@@ -733,7 +901,7 @@ function bindEvents() {
   });
   $('#paper').addEventListener('wheel', event => {
     if (!state.selectedSticker) return;
-    $('#noteContent').scrollTop += event.deltaY;
+    $('#noteScroll').scrollTop += event.deltaY;
     event.preventDefault();
   }, { passive: false });
   $('#homeButton').addEventListener('click', async () => { await saveCurrentNote(); await loadYears(); showView('home'); });
@@ -741,6 +909,7 @@ function bindEvents() {
   $('[data-view="today"]').addEventListener('click', async () => { const now = new Date(); state.currentYear = now.getFullYear(); await openEditor(dateKey(now), 'yearOverview'); });
   $('[data-view="search"]').addEventListener('click', async () => { await saveCurrentNote(); showView('search'); $('#searchInput').focus(); });
   $('[data-view="favorites"]').addEventListener('click', async () => { await saveCurrentNote(); showView('favorites'); await loadFavorites(); });
+  $('[data-view="stats"]').addEventListener('click', async () => { await saveCurrentNote(); await loadYears(); showView('stats'); await loadStats(); });
   $('[data-view="trash"]').addEventListener('click', async () => { await saveCurrentNote(); showView('trash'); await loadTrash(); });
   $('[data-view="settings"]').addEventListener('click', async () => { await saveCurrentNote(); showView('settings'); });
   $('#backToYears').addEventListener('click', async () => { await openYearOverview(state.currentYear); });
@@ -753,6 +922,7 @@ function bindEvents() {
     else if (state.editorReturnView === 'search') { showView('search'); await runSearch(); }
     else if (state.editorReturnView === 'favorites') { showView('favorites'); await loadFavorites(); }
     else if (state.editorReturnView === 'trash') { showView('trash'); await loadTrash(); }
+    else if (state.editorReturnView === 'stats') { showView('stats'); await loadStats(); }
     else await openYearOverview(state.currentYear);
   });
   $('#editYearButton').addEventListener('click', () => openYearDialog(state.currentYear));
@@ -778,6 +948,8 @@ function bindEvents() {
     updateYearTitleImagePreview();
   });
   $('#editorAddTag').addEventListener('click', openTagDialog);
+  $('#insertNoteLink').addEventListener('click', openNoteLinkDialog);
+  $('#noteLinkSearch').addEventListener('input', event => renderNoteLinkResults(event.target.value));
   $('#saveButton').addEventListener('click', saveCurrentNote);
   $('#favoriteNoteButton').addEventListener('click', async () => {
     if (!state.currentDate || !state.currentHasContent) return;
@@ -786,7 +958,20 @@ function bindEvents() {
     updateFavoriteButton();
   });
   $('#moreActionsButton').addEventListener('click', () => {
-    $('#moreActionsMenu').classList.toggle('active');
+    const menu = $('#moreActionsMenu');
+    const button = $('#moreActionsButton');
+    const opening = !menu.classList.contains('active');
+    if (opening) {
+      const rect = button.getBoundingClientRect();
+      document.body.append(menu);
+      menu.style.top = `${rect.bottom + 8}px`;
+      menu.style.left = `${rect.right}px`;
+      menu.style.right = 'auto';
+      menu.style.transform = 'translateX(-100%) translateY(-8px)';
+      menu.classList.add('portal-menu', 'active');
+    } else {
+      menu.classList.remove('active');
+    }
   });
   $('#exportNotePdfButton').addEventListener('click', async () => {
     if (!state.currentDate) return;
@@ -797,7 +982,8 @@ function bindEvents() {
         note_date: state.currentDate,
         title: $('#noteTitle').value.trim(),
         content: $('#noteContent').innerHTML,
-        mood: $('#moodSelect').value
+        mood: $('#moodSelect').value,
+        stickers: state.stickers
       });
       if (filePath) $('#editorSaveHint').textContent = 'PDF 已导出';
     } catch (error) {
@@ -811,6 +997,7 @@ function bindEvents() {
       menu.classList.remove('active');
     }
   });
+  window.addEventListener('resize', () => $('#moreActionsMenu')?.classList.remove('active'));
   $('#deleteNoteButton').addEventListener('click', async () => {
     if (!state.currentDate) return;
     if (!await confirmAction({ title: '删除这篇日志？', message: '这篇日志、标签关联和贴纸将被永久移除。', confirmLabel: '删除日志' })) return;
@@ -823,6 +1010,11 @@ function bindEvents() {
   $('#editNoteButton').addEventListener('click', () => {
     setEditorMode(true);
     $('#noteContent').focus();
+  });
+  $('#exitEditButton').addEventListener('click', async () => {
+    $('#moreActionsMenu').classList.remove('active');
+    await saveCurrentNote();
+    setEditorMode(false);
   });
   $('#randomSticker').addEventListener('click', () => {
     const assets = allStickerAssets();
@@ -840,12 +1032,93 @@ function bindEvents() {
   });
   $('#rotateSticker').addEventListener('input', event => updateSelectedSticker('rotation', Number(event.target.value)));
   $('#scaleSticker').addEventListener('input', event => updateSelectedSticker('scale', Number(event.target.value) / 100));
-  ['#noteTitle', '#noteContent', '#moodSelect'].forEach(selector => $(selector).addEventListener('input', () => setDirty(true)));
+  $('#opacitySticker').addEventListener('input', event => updateSelectedSticker('opacity', Number(event.target.value) / 100));
+  $('#statsYearSelect').addEventListener('change', event => loadStats(Number(event.target.value)));
+  ['#noteTitle', '#noteContent', '#moodSelect'].forEach(selector => $(selector).addEventListener('input', () => {
+    if (selector === '#noteContent') syncStickerLayerSize();
+    setDirty(true);
+  }));
   $('#noteContent').addEventListener('keydown', event => {
     if (event.key !== 'Tab' || !state.editing) return;
     event.preventDefault();
     document.execCommand('insertText', false, '\u3000\u3000');
     setDirty(true);
+  });
+  $('#noteHistoryButton').addEventListener('click', openHistoryDialog);
+  $('#noteScroll').addEventListener('dragover', event => {
+    const stickerAsset = event.dataTransfer.types.includes('text/x-angelina-sticker');
+    if (!state.editing || !stickerAsset) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    $('#noteScroll').classList.add('sticker-drop-target');
+  });
+  $('#noteScroll').addEventListener('dragleave', event => {
+    if (!$('#noteScroll').contains(event.relatedTarget)) $('#noteScroll').classList.remove('sticker-drop-target');
+  });
+  $('#noteScroll').addEventListener('drop', event => {
+    const asset = event.dataTransfer.getData('text/x-angelina-sticker');
+    $('#noteScroll').classList.remove('sticker-drop-target');
+    if (!state.editing || !asset) return;
+    event.preventDefault();
+    const rect = $('#noteScroll').getBoundingClientRect();
+    addSticker(asset, false, {
+      x: event.clientX - rect.left - 60,
+      y: event.clientY - rect.top + $('#noteScroll').scrollTop - 60
+    });
+  });
+  $('#noteContent').addEventListener('dragover', event => {
+    const draggingImage = event.dataTransfer.types.includes('text/x-angelina-inline-image');
+    if (!state.editing || (!draggingImage && ![...event.dataTransfer.types].includes('Files'))) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = draggingImage ? 'move' : 'copy';
+    $('#noteContent').classList.add('drag-over');
+  });
+  $('#noteContent').addEventListener('dragleave', () => $('#noteContent').classList.remove('drag-over'));
+  $('#noteContent').addEventListener('dragstart', event => {
+    if (!state.editing || event.target.tagName !== 'IMG') return;
+    event.dataTransfer.setData('text/x-angelina-inline-image', '1');
+    event.dataTransfer.effectAllowed = 'move';
+    event.target.classList.add('image-moving');
+  });
+  $('#noteContent').addEventListener('dragend', event => {
+    if (event.target.tagName === 'IMG') event.target.classList.remove('image-moving');
+    $('#noteContent').classList.remove('drag-over');
+  });
+  $('#noteContent').addEventListener('drop', async event => {
+    $('#noteContent').classList.remove('drag-over');
+    if (!state.editing) return;
+    const range = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+    const movingImage = event.dataTransfer.types.includes('text/x-angelina-inline-image');
+    if (movingImage) {
+      event.preventDefault();
+      const image = $('#noteContent img.image-moving');
+      if (image && range) {
+        range.insertNode(image);
+        range.setStartAfter(image);
+        range.collapse(true);
+      }
+      setDirty(true);
+      return;
+    }
+    if (!event.dataTransfer.files.length) return;
+    event.preventDefault();
+    const file = event.dataTransfer.files[0];
+    if (!file.path) return;
+    try {
+      const image = await api.importDroppedNoteAttachment(file.path);
+      const selection = window.getSelection();
+      $('#noteContent').focus();
+      if (range) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      document.execCommand('insertImage', false, image);
+      const inserted = $('#noteContent').querySelector('img:last-of-type');
+      if (inserted) { inserted.classList.add('movable-image'); inserted.draggable = true; }
+      setDirty(true);
+    } catch (error) {
+      window.alert(`图片插入失败：${error.message}`);
+    }
   });
   // 格式工具栏
   $$('.format-toolbar button[data-command]').forEach(button => button.addEventListener('click', () => {
@@ -865,6 +1138,25 @@ function bindEvents() {
     if (customFont) document.execCommand('fontName', false, `${customFont.family}, Microsoft YaHei`);
     else if (editorFonts[event.target.value]) document.execCommand('fontName', false, editorFonts[event.target.value]);
     $('#noteContent').focus();
+    setDirty(true);
+  });
+  $('#editorFontSize').addEventListener('change', event => {
+    const pixels = Number(event.target.value);
+    if (!pixels || !state.editing) return;
+    const selection = window.getSelection();
+    const range = selection.rangeCount && $('#noteContent').contains(selection.anchorNode)
+      ? selection.getRangeAt(0).cloneRange() : null;
+    $('#noteContent').focus();
+    if (range) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    document.execCommand('fontSize', false, '7');
+    $$('#noteContent font[size="7"]').forEach(font => {
+      font.removeAttribute('size');
+      font.style.fontSize = `${pixels}px`;
+    });
+    event.target.value = '';
     setDirty(true);
   });
   // 重构插入图片，移除废弃execCommand
@@ -1013,6 +1305,7 @@ function updateSelectedSticker(key, value) {
   element.style.left = `${sticker.x}px`;
   element.style.top = `${sticker.y}px`;
   element.style.transform = `rotate(${sticker.rotation}deg) scale(${sticker.scale})`;
+  element.style.opacity = sticker.opacity ?? 1;
   setDirty(true);
 }
 

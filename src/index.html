@@ -19,6 +19,7 @@
         <button class="nav-item" data-view="today" title="今天"><i data-lucide="calendar-heart"></i><span>今天</span></button>
         <button class="nav-item" data-view="search" title="全文搜索"><i data-lucide="search"></i><span>全文搜索</span></button>
         <button class="nav-item" data-view="favorites" title="我的收藏"><i data-lucide="star"></i><span>我的收藏</span></button>
+        <button class="nav-item" data-view="stats" title="年度统计"><i data-lucide="chart-no-axes-column-increasing"></i><span>年度统计</span></button>
         <button class="nav-item" data-view="trash" title="回收站"><i data-lucide="trash-2"></i><span>回收站</span></button>
         <button class="nav-item" data-view="settings" title="设置"><i data-lucide="settings-2"></i><span>设置</span></button>
       </nav>
@@ -59,6 +60,12 @@
         <header class="page-header"><div><p class="eyebrow">FAVORITE DAYS</p><h1>我的收藏</h1><p class="page-description">集中翻阅被星标收藏的日子。</p></div><button id="refreshFavorites" class="icon-button large" title="刷新收藏"><i data-lucide="refresh-cw"></i></button></header>
         <div class="journal-heading"><div><p class="eyebrow">SAVED MEMORIES</p><h2>收藏日志</h2></div><span id="favoriteResultCount"></span></div>
         <div id="favoriteResults" class="journal-stream archive-results"></div>
+      </section>
+
+      <section id="statsView" class="view stats-view">
+        <header class="page-header"><div><p class="eyebrow">YEAR IN NUMBERS</p><h1>年度统计</h1><p id="statsDescription" class="page-description">回看这一年的书写轨迹。</p></div><select id="statsYearSelect" class="setting-select" aria-label="选择统计年份"></select></header>
+        <div id="statsSummary" class="stats-summary"></div>
+        <div class="stats-grid"><section class="stats-panel"><p class="eyebrow">TAGS</p><h2>标签分布</h2><div id="statsTags" class="stats-bars"></div></section><section class="stats-panel"><p class="eyebrow">MOOD & WEATHER</p><h2>心情与天气</h2><div id="statsMoods" class="stats-bars"></div></section></div>
       </section>
 
       <section id="trashView" class="view archive-view">
@@ -131,6 +138,8 @@
             <div class="editor-more-actions">
               <div id="moreActionsMenu" class="more-actions-menu">
                 <button id="exportNotePdfButton" class="secondary-button"><i data-lucide="file-down"></i><span>导出 PDF</span></button>
+                <button id="noteHistoryButton" class="secondary-button"><i data-lucide="history"></i><span>写作历史</span></button>
+                <button id="exitEditButton" class="secondary-button"><i data-lucide="book-open"></i><span>退出编辑</span></button>
                 <button id="deleteNoteButton" class="danger-button"><i data-lucide="trash-2"></i><span>删除日志</span></button>
               </div>
               <button id="moreActionsButton" class="icon-button" title="更多操作" aria-label="更多操作"><i data-lucide="more-vertical"></i></button>
@@ -170,18 +179,23 @@
               <button data-command="insertUnorderedList" title="无序列表"><i data-lucide="list"></i></button>
               <button data-command="formatBlock" data-value="blockquote" title="引用"><i data-lucide="quote"></i></button>
               <button id="insertNoteImage" type="button" title="插入图片"><i data-lucide="image-plus"></i></button>
+              <button id="insertNoteLink" type="button" title="关联日志"><i data-lucide="link-2"></i></button>
               <select id="fontSelect" aria-label="字体"><option value="">默认字体</option><option value="mixed">中英混排</option><option value="serif">中英衬线</option><option value="handwritten">中英手写</option><option value="monospace">中英等宽</option></select>
+              <select id="editorFontSize" aria-label="所选文字字号"><option value="">字号</option><option value="12">12 px</option><option value="14">14 px</option><option value="16">16 px</option><option value="18">18 px</option><option value="20">20 px</option><option value="24">24 px</option><option value="28">28 px</option><option value="32">32 px</option></select>
             </div>
-            <div id="noteContent" class="note-content" contenteditable="true" data-placeholder="今天发生了什么？从这里写下第一句话……"></div>
-            <div id="stickerLayer" class="sticker-layer"></div>
+            <div id="noteScroll" class="note-scroll">
+              <div id="noteContent" class="note-content" contenteditable="true" data-placeholder="今天发生了什么？从这里写下第一句话……"></div>
+              <div id="stickerLayer" class="sticker-layer"></div>
+            </div>
           </article>
           <aside class="sticker-panel">
             <div class="panel-heading"><div><p class="eyebrow">STICKER BOX</p><h2>贴纸收藏盒</h2></div><div class="sticker-heading-actions"><button id="stickerModeButton" class="icon-button" title="开启贴纸模式" aria-label="开启贴纸模式" aria-pressed="false"><i data-lucide="mouse-pointer-2"></i></button><button id="randomSticker" class="icon-button" title="随机贴一张"><i data-lucide="shuffle"></i></button></div></div>
-            <p class="panel-note">点击添加，拖动调整位置。选中后可旋转、缩放或删除。</p>
+            <p class="panel-note">拖拽贴纸到正文定位，放下后可旋转、缩放或删除。</p>
             <div id="stickerLibrary" class="sticker-library"></div>
             <div id="stickerControls" class="sticker-controls disabled">
               <label>旋转 <output id="rotateStickerValue">0°</output><input id="rotateSticker" type="range" min="0" max="360" value="0"></label>
               <label>大小 <output id="scaleStickerValue">120 px</output><input id="scaleSticker" type="range" min="60" max="180" value="100"></label>
+              <label>透明度 <output id="opacityStickerValue">100%</output><input id="opacitySticker" type="range" min="10" max="100" value="100"></label>
               <button id="deleteSticker" class="danger-button"><i data-lucide="trash-2"></i><span>移除贴纸</span></button>
             </div>
             <div class="tag-editor"><div class="section-label"><span>选择已有标签</span><button id="editorAddTag" class="icon-button" title="新建标签"><i data-lucide="plus"></i></button></div><div id="noteTags" class="note-tags"></div></div>
@@ -259,6 +273,17 @@
       <p id="confirmMessage" class="confirm-message"></p>
       <div class="dialog-actions"><button id="confirmCancelButton" type="button" class="secondary-button">取消</button><button id="confirmAcceptButton" type="button" class="danger-button">确定</button></div>
     </form>
+  </dialog>
+  <dialog id="noteLinkDialog" class="note-link-dialog">
+    <form method="dialog" id="noteLinkForm">
+      <div class="dialog-head"><div><p class="eyebrow">LINK A NOTE</p><h2>关联日志</h2></div><button type="button" data-close-dialog="noteLinkDialog" class="icon-button" title="关闭"><i data-lucide="x"></i></button></div>
+      <label>按标题查找<input id="noteLinkSearch" type="search" placeholder="输入日志标题筛选" autocomplete="off"></label>
+      <div id="noteLinkResults" class="note-link-results"></div>
+      <div class="dialog-actions"><button type="button" data-close-dialog="noteLinkDialog" class="secondary-button">取消</button></div>
+    </form>
+  </dialog>
+  <dialog id="historyDialog" class="note-link-dialog">
+    <form method="dialog"><div class="dialog-head"><div><p class="eyebrow">WRITING HISTORY</p><h2>写作历史</h2></div><button type="button" data-close-dialog="historyDialog" class="icon-button" title="关闭"><i data-lucide="x"></i></button></div><div id="historyResults" class="note-link-results"></div><div class="dialog-actions"><button type="button" data-close-dialog="historyDialog" class="secondary-button">关闭</button></div></form>
   </dialog>
 
   <script src="../node_modules/lucide/dist/umd/lucide.js"></script>

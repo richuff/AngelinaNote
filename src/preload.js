@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('angelina', {
   getAppVersion: () => ipcRenderer.invoke('app:version'),
+  onTrayNavigate: callback => ipcRenderer.on('navigate-from-tray', (_, view) => callback(view)),
   // 更新相关
   checkUpdate: () => ipcRenderer.send('check-update'),
   onUpdateStatus: (callback) => ipcRenderer.on('update-status', (_, text) => callback(text)),
@@ -15,8 +16,13 @@ contextBridge.exposeInMainWorld('angelina', {
   pickYearCover: () => ipcRenderer.invoke('years:pick-cover'),
   pickYearTitleImage: () => ipcRenderer.invoke('years:pick-title-image'),
   getYearNotes: (year, tagId) => ipcRenderer.invoke('notes:year', { year, tagId }),
+  getYearStats: year => ipcRenderer.invoke('notes:stats', year),
+  getNoteByTitle: title => ipcRenderer.invoke('notes:by-title', title),
+  listNoteTitles: query => ipcRenderer.invoke('notes:titles', query),
   getNote: date => ipcRenderer.invoke('notes:get', date),
   saveNote: note => ipcRenderer.invoke('notes:save', note),
+  listNoteHistory: date => ipcRenderer.invoke('notes:history', date),
+  restoreNoteHistory: id => ipcRenderer.invoke('notes:restore-history', id),
   deleteNote: date => ipcRenderer.invoke('notes:delete', date),
   listTrashNotes: () => ipcRenderer.invoke('notes:trash'),
   restoreNote: date => ipcRenderer.invoke('notes:restore', date),
@@ -27,6 +33,7 @@ contextBridge.exposeInMainWorld('angelina', {
   searchNotes: query => ipcRenderer.invoke('notes:search', query),
   listFavoriteNotes: () => ipcRenderer.invoke('notes:favorites'),
   pickNoteAttachment: () => ipcRenderer.invoke('notes:pick-attachment'),
+  importDroppedNoteAttachment: filePath => ipcRenderer.invoke('notes:import-dropped-attachment', filePath),
   exportData: () => ipcRenderer.invoke('data:export'),
   importData: () => ipcRenderer.invoke('data:import'),
   listTags: () => ipcRenderer.invoke('tags:list'),
