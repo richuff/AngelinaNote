@@ -1,21 +1,21 @@
-# Angelina Note v1.0.2
+# AngelinaNoteV1.0.2
 
-## New
+## 新增功能
 
-- Added year statistics for word count, longest writing streak, recorded days, tag distribution, and mood/weather distribution.
-- Added note links: choose an existing note title to insert `[[title]]`, then open it directly in reading mode.
-- Added writing history. Each note keeps the five most recent versions and supports restoring a prior version.
-- Enhanced the monthly calendar with mood/weather indicators and favorite markers.
-- Sticker library now supports drag-and-drop placement into the writing area.
-- Added sticker opacity control. Opacity is retained in local storage, backups, and PDF exports.
+新增年度统计：年度字数、最长连续记录天数、记录天数、标签分布，以及心情/天气分布。
+新增日志关联：从已有日志标题中选择，插入 [[日志标题]]，阅读状态下可直接跳转打开。
+新增写作历史：每篇日志保留最近 5 个版本，支持恢复历史版本。
+增强月历：显示心情/天气标记与收藏标记。
+贴纸收藏盒支持拖拽到正文区域定位。
+新增贴纸透明度调节，透明度会保存在本地数据、备份文件和 PDF 导出中。
 
-## Improved
+## 体验优化
 
-- Reading mode uses the full available paper area and removes redundant trailing empty blocks.
-- Added an Exit Editing action in the More menu.
-- Settings controls adapt better to available window width.
-- Update checks now distinguish current-version, missing-release-assets, network, and verification failures.
+阅读状态充分利用纸张可用空间，并清理正文末尾多余的空行。
+“更多操作”中新增“退出编辑”。
+设置项会根据窗口可用宽度更好地自适应布局。
+更新检测可区分“当前已是最新版本”、缺少更新文件、网络异常和校验失败等状态。
 
-## Update Package
+## 更新包说明
 
-- Windows NSIS installer, generated `latest.yml`, and `.blockmap` are included for GitHub Release automatic updates.
+GitHub Release 中包含 Windows NSIS 安装包、自动更新配置文件 latest.yml 和 .blockmap 文件，用于自动更新。
