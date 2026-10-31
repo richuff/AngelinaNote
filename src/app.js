@@ -33,6 +33,7 @@ const state = {
 // 新增：保存并发锁，防止重复写入
 let isSaving = false;
 let noteLinkRange = null;
+let selectedInlineImage = null;
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -64,6 +65,7 @@ function refreshIcons() {
 
 function showView(name) {
   state.currentView = name;
+  api.setCurrentView?.(name);
   $$('.view').forEach(view => view.classList.toggle('active', view.id === `${name}View`));
   $$('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.view === name));
   refreshIcons();
@@ -105,6 +107,29 @@ async function init() {
         const now = new Date();
         state.currentYear = now.getFullYear();
         await openEditor(dateKey(now), 'yearOverview');
+      } else if (view === 'editor' && state.currentDate) {
+        showView('editor');
+      } else if (view === 'year' && state.currentYear) {
+        await openYear(state.currentYear);
+      } else if (view === 'yearOverview' && state.currentYear) {
+        await openYearOverview(state.currentYear);
+      } else if (view === 'yearCover' && state.currentYear) {
+        showView('yearCover');
+      } else if (view === 'search') {
+        showView('search');
+        $('#searchInput').focus();
+      } else if (view === 'favorites') {
+        showView('favorites');
+        await loadFavorites();
+      } else if (view === 'stats') {
+        await loadYears();
+        showView('stats');
+        await loadStats();
+      } else if (view === 'trash') {
+        showView('trash');
+        await loadTrash();
+      } else if (view === 'settings') {
+        showView('settings');
       } else {
         await loadYears();
         showView('home');
@@ -901,6 +926,12 @@ function bindEvents() {
   });
   $('#paper').addEventListener('wheel', event => {
     if (!state.selectedSticker) return;
+    if (event.ctrlKey || event.metaKey) {
+      const sticker = state.stickers.find(item => item.id === state.selectedSticker);
+      if (sticker) updateSelectedSticker('scale', Math.max(.5, Math.min(1.5, sticker.scale + (event.deltaY < 0 ? .05 : -.05))));
+      event.preventDefault();
+      return;
+    }
     $('#noteScroll').scrollTop += event.deltaY;
     event.preventDefault();
   }, { passive: false });
@@ -1039,10 +1070,26 @@ function bindEvents() {
     setDirty(true);
   }));
   $('#noteContent').addEventListener('keydown', event => {
+    if ((event.key === 'Delete' || event.key === 'Backspace') && selectedInlineImage && state.editing) {
+      event.preventDefault();
+      selectedInlineImage.remove();
+      selectedInlineImage = null;
+      setDirty(true);
+      return;
+    }
     if (event.key !== 'Tab' || !state.editing) return;
     event.preventDefault();
     document.execCommand('insertText', false, '\u3000\u3000');
     setDirty(true);
+  });
+  $('#noteContent').addEventListener('click', event => {
+    if (event.target.tagName === 'IMG' && state.editing) {
+      selectedInlineImage = event.target;
+      $$('#noteContent img').forEach(image => image.classList.toggle('inline-image-selected', image === selectedInlineImage));
+    } else if (!event.target.closest('.note-link')) {
+      selectedInlineImage = null;
+      $$('#noteContent img').forEach(image => image.classList.remove('inline-image-selected'));
+    }
   });
   $('#noteHistoryButton').addEventListener('click', openHistoryDialog);
   $('#noteScroll').addEventListener('dragover', event => {
@@ -1181,6 +1228,12 @@ function bindEvents() {
     range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
+    setDirty(true);
+  });
+  $('#deleteNoteImage').addEventListener('click', () => {
+    if (!selectedInlineImage || !state.editing) return;
+    selectedInlineImage.remove();
+    selectedInlineImage = null;
     setDirty(true);
   });
   $('#sidebarCollapse').addEventListener('click', () => {

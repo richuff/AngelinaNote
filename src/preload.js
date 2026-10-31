@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('angelina', {
   getAppVersion: () => ipcRenderer.invoke('app:version'),
+  setCurrentView: view => ipcRenderer.send('app:view-changed', view),
   onTrayNavigate: callback => ipcRenderer.on('navigate-from-tray', (_, view) => callback(view)),
   // 更新相关
   checkUpdate: () => ipcRenderer.send('check-update'),

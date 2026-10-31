@@ -11,6 +11,16 @@ let mainWindow = null;
 let tray = null;
 let isQuitting = false;
 let updateCheckInProgress = false;
+let lastTrayView = 'home';
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    showMainWindow();
+  });
+}
 
 // ========== 自动更新配置 ==========
 // 更新日志输出
@@ -229,7 +239,7 @@ function createWindow() {
   bindAutoUpdateEvents();
 }
 
-function showMainWindow(view = 'home') {
+function showMainWindow(view = lastTrayView) {
   if (!mainWindow || mainWindow.isDestroyed()) createWindow();
   mainWindow.show();
   mainWindow.focus();
@@ -243,10 +253,15 @@ function createTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '今日日志', click: () => showMainWindow('today') },
     { label: '年度书架', click: () => showMainWindow('home') },
+    { label: '全文搜索', click: () => showMainWindow('search') },
+    { label: '我的收藏', click: () => showMainWindow('favorites') },
+    { label: '年度统计', click: () => showMainWindow('stats') },
+    { label: '回收站', click: () => showMainWindow('trash') },
+    { label: '设置', click: () => showMainWindow('settings') },
     { type: 'separator' },
     { label: '退出', click: () => { isQuitting = true; app.quit(); } }
   ]));
-  tray.on('double-click', () => showMainWindow('home'));
+  tray.on('click', () => showMainWindow());
 }
 
 function getCustomFontDir() {
@@ -272,6 +287,9 @@ function listCustomFonts() {
 
 function registerIpc() {
   ipcMain.handle('app:version', () => app.getVersion());
+  ipcMain.on('app:view-changed', (_, view) => {
+    if (typeof view === 'string' && view) lastTrayView = view;
+  });
   // 新增：渲染层触发检查更新
   ipcMain.on('check-update', async () => {
     if (!app.isPackaged) {
@@ -673,7 +691,7 @@ app.whenReady().then(() => {
   registerIpc();
   createWindow();
   createTray();
-  app.on('activate', () => showMainWindow('home'));
+  app.on('activate', () => showMainWindow());
 });
 
 app.on('window-all-closed', () => {
