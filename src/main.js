@@ -230,6 +230,8 @@ function createWindow() {
     icon: path.join(app.getAppPath(), 'Angelina', 'Icons', 'app.ico'),
     backgroundColor: '#f7f4ea',
     autoHideMenuBar: true,
+    frame: false,
+    thickFrame: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -238,6 +240,8 @@ function createWindow() {
   });
   mainWindow = win;
   win.loadFile(path.join(__dirname, 'index.html'));
+  win.on('maximize', () => win.webContents.send('window:maximized', true));
+  win.on('unmaximize', () => win.webContents.send('window:maximized', false));
   win.on('close', event => {
     if (!isQuitting) {
       event.preventDefault();
@@ -297,6 +301,16 @@ function listCustomFonts() {
 
 function registerIpc() {
   ipcMain.handle('app:version', () => app.getVersion());
+  // 无边框窗口控制
+  ipcMain.handle('window:minimize', () => { mainWindow?.minimize(); return true; });
+  ipcMain.handle('window:toggle-maximize', () => {
+    if (!mainWindow) return false;
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    else mainWindow.maximize();
+    return mainWindow.isMaximized();
+  });
+  ipcMain.handle('window:close', () => { mainWindow?.close(); return true; });
+  ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() === true);
   ipcMain.on('app:view-changed', (_, view) => {
     if (typeof view === 'string' && view) lastTrayView = view;
   });

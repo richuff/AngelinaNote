@@ -3,6 +3,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('angelina', {
   getAppVersion: () => ipcRenderer.invoke('app:version'),
   setCurrentView: view => ipcRenderer.send('app:view-changed', view),
+  minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
+  toggleMaximizeWindow: () => ipcRenderer.invoke('window:toggle-maximize'),
+  closeWindow: () => ipcRenderer.invoke('window:close'),
+  isWindowMaximized: () => ipcRenderer.invoke('window:is-maximized'),
+  onWindowMaximized: callback => ipcRenderer.on('window:maximized', (_, value) => callback(value)),
   onTrayNavigate: callback => ipcRenderer.on('navigate-from-tray', (_, view) => callback(view)),
   // 更新相关
   checkUpdate: () => ipcRenderer.send('check-update'),

@@ -1480,6 +1480,18 @@ function bindEvents() {
     state.memoFilter = button.dataset.filter;
     renderMemos();
   }));
+  // ── 自绘标题栏窗口控制 ──
+  $('#minimizeButton').addEventListener('click', () => api.minimizeWindow?.());
+  $('#maximizeButton').addEventListener('click', async () => {
+    const maximized = await api.toggleMaximizeWindow?.();
+    updateMaximizeIcon(maximized === true);
+  });
+  $('#closeButton').addEventListener('click', () => api.closeWindow?.());
+  api.onWindowMaximized?.(value => updateMaximizeIcon(value === true));
+  (async () => {
+    const maximized = await api.isWindowMaximized?.();
+    updateMaximizeIcon(maximized === true);
+  })();
   window.addEventListener('beforeunload', async (e) => {
     if (state.dirty) {
       await saveCurrentNote();
@@ -1499,6 +1511,18 @@ function updateSelectedSticker(key, value) {
   element.style.transform = `rotate(${sticker.rotation}deg) scale(${sticker.scale})`;
   element.style.opacity = sticker.opacity ?? 1;
   setDirty(true);
+}
+
+// ── 标题栏：最大化/还原视觉状态 ──────────────────────────────────────────
+function updateMaximizeIcon(maximized) {
+  const titlebar = $('#titlebar');
+  const button = $('#maximizeButton');
+  if (!titlebar || !button) return;
+  titlebar.classList.toggle('is-maximized', maximized);
+  button.title = maximized ? '还原' : '最大化';
+  button.setAttribute('aria-label', maximized ? '还原' : '最大化');
+  button.innerHTML = `<i data-lucide="${maximized ? 'copy' : 'square'}"></i>`;
+  refreshIcons();
 }
 
 function escapeHtml(value) {
