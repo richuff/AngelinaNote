@@ -39,5 +39,10 @@ contextBridge.exposeInMainWorld('angelina', {
   importData: () => ipcRenderer.invoke('data:import'),
   listTags: () => ipcRenderer.invoke('tags:list'),
   createTag: tag => ipcRenderer.invoke('tags:create', tag),
-  deleteTag: tagId => ipcRenderer.invoke('tags:delete', tagId)
+  deleteTag: tagId => ipcRenderer.invoke('tags:delete', tagId),
+  // 备忘录
+  listMemos: () => ipcRenderer.invoke('memos:list'),
+  saveMemo: memo => ipcRenderer.invoke('memos:save', memo),
+  deleteMemo: id => ipcRenderer.invoke('memos:delete', id),
+  toggleMemo: (id, field) => ipcRenderer.invoke('memos:toggle', { id, field })
 });

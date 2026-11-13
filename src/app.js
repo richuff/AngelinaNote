@@ -28,6 +28,7 @@ const state = {
   currentDate: null, yearNotes: [], stickers: [], selectedSticker: null, dirty: false,
   editing: false, stickerMode: false, currentFavorite: false, currentHasContent: false, saveTimer: null, currentView: 'home', editorReturnView: 'yearOverview',
   pendingYearCover: '', pendingYearTitleImage: '',
+  memos: [], memoFilter: 'all', memoQuery: '',
   preferences: { theme: 'blue', appFont: 'interfaceHandwritten', autoSave: true, compactCalendar: false, fontSize: 16, lineHeight: 31, collapsedSidebar: false }
 };
 // 新增：保存并发锁，防止重复写入
@@ -121,6 +122,9 @@ async function init() {
       } else if (view === 'favorites') {
         showView('favorites');
         await loadFavorites();
+      } else if (view === 'memos') {
+        showView('memos');
+        await loadMemos();
       } else if (view === 'stats') {
         await loadYears();
         showView('stats');
@@ -374,6 +378,122 @@ async function loadFavorites() {
   const notes = await api.listFavoriteNotes();
   $('#favoriteResultCount').textContent = `${notes.length} 篇收藏`;
   renderArchiveResults('#favoriteResults', notes, '还没有收藏日志');
+}
+
+// ── 备忘录 ────────────────────────────────────────────────────────────────
+function formatMemoTime(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return sameDay ? `今天 ${time}` : `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${time}`;
+}
+
+function renderMemos() {
+  const query = state.memoQuery.trim().toLowerCase();
+  const visible = state.memos.filter(memo => {
+    if (state.memoFilter === 'active' && memo.done) return false;
+    if (state.memoFilter === 'done' && !memo.done) return false;
+    if (query && !`${memo.title} ${memo.content}`.toLowerCase().includes(query)) return false;
+    return true;
+  });
+  $('#memoResultCount').textContent = `${visible.length} 条备忘`;
+  $$('.memo-filter').forEach(button => button.classList.toggle('active', button.dataset.filter === state.memoFilter));
+  const container = $('#memoList');
+  if (!visible.length) {
+    const emptyTitle = query ? '没有匹配的备忘' : state.memoFilter === 'done' ? '还没有已完成的备忘' : '备忘清单是空的';
+    const emptyHint = query ? '换个关键词试试，或清空搜索。' : '点右上角「新建备忘」，记下第一件想留住的事。';
+    container.innerHTML = `<div class="memo-empty"><i data-lucide="clipboard-list"></i><strong>${escapeHtml(emptyTitle)}</strong><p>${escapeHtml(emptyHint)}</p></div>`;
+    refreshIcons();
+    return;
+  }
+  container.innerHTML = visible.map(memo => {
+    const body = memo.content.trim();
+    return `<article class="memo-card${memo.done ? ' is-done' : ''}${memo.pinned ? ' is-pinned' : ''}" data-id="${memo.id}">
+      <div class="memo-card-top">
+        <button class="memo-check-button" data-action="toggle-done" title="${memo.done ? '标记为未完成' : '标记为已完成'}" aria-label="切换完成状态"><i data-lucide="check"></i></button>
+        <h3 class="memo-card-title">${escapeHtml(memo.title || '未命名备忘')}</h3>
+      </div>
+      <p class="memo-card-body${body ? '' : ' memo-card-empty-body'}">${escapeHtml(body || '（暂无内容）')}</p>
+      <div class="memo-card-footer">
+        <span class="memo-card-time">${escapeHtml(formatMemoTime(memo.updated_at))}</span>
+        <span class="memo-card-actions">
+          <button class="icon-button memo-pin${memo.pinned ? ' active' : ''}" data-action="toggle-pin" title="${memo.pinned ? '取消置顶' : '置顶'}" aria-label="切换置顶"><i data-lucide="pin"></i></button>
+          <button class="icon-button" data-action="edit" title="编辑" aria-label="编辑"><i data-lucide="pencil"></i></button>
+          <button class="icon-button" data-action="delete" title="删除" aria-label="删除"><i data-lucide="trash-2"></i></button>
+        </span>
+      </div>
+    </article>`;
+  }).join('');
+  container.querySelectorAll('.memo-card').forEach(card => {
+    const id = Number(card.dataset.id);
+    card.querySelectorAll('[data-action]').forEach(button => {
+      button.addEventListener('click', async event => {
+        event.stopPropagation();
+        await handleMemoAction(button.dataset.action, id);
+      });
+    });
+  });
+  refreshIcons();
+}
+
+async function loadMemos() {
+  state.memos = await api.listMemos();
+  renderMemos();
+}
+
+async function handleMemoAction(action, id) {
+  const memo = state.memos.find(item => item.id === id);
+  if (!memo) return;
+  if (action === 'toggle-done' || action === 'toggle-pin') {
+    const field = action === 'toggle-done' ? 'done' : 'pinned';
+    await api.toggleMemo(id, field);
+    await loadMemos();
+  } else if (action === 'edit') {
+    openMemoDialog(memo);
+  } else if (action === 'delete') {
+    const ok = await confirmAction({
+      title: '删除这条备忘？',
+      message: `「${memo.title || '未命名备忘'}」将被永久删除，此操作无法撤销。`,
+      confirmLabel: '删除', kicker: 'DELETE MEMO'
+    });
+    if (!ok) return;
+    await api.deleteMemo(id);
+    await loadMemos();
+  }
+}
+
+function openMemoDialog(memo = null) {
+  $('#memoForm').reset();
+  $('#memoId').value = memo ? String(memo.id) : '';
+  $('#memoTitleInput').value = memo ? memo.title : '';
+  $('#memoContentInput').value = memo ? memo.content : '';
+  $('#memoDoneInput').checked = memo ? Boolean(memo.done) : false;
+  $('#memoPinnedInput').checked = memo ? Boolean(memo.pinned) : false;
+  $('#memoDialogTitle').textContent = memo ? '编辑备忘' : '新建备忘';
+  $('#memoDialog').showModal();
+  refreshIcons();
+  $('#memoTitleInput').focus();
+}
+
+async function saveMemoFromDialog(event) {
+  event.preventDefault();
+  const id = $('#memoId').value;
+  const payload = {
+    title: $('#memoTitleInput').value.trim(),
+    content: $('#memoContentInput').value,
+    done: $('#memoDoneInput').checked,
+    pinned: $('#memoPinnedInput').checked
+  };
+  if (!payload.title && !payload.content.trim()) {
+    $('#memoDialog').close();
+    return;
+  }
+  if (id) payload.id = Number(id);
+  await api.saveMemo(payload);
+  $('#memoDialog').close();
+  await loadMemos();
 }
 
 function daysRemaining(deletedAt) {
@@ -938,6 +1058,7 @@ function bindEvents() {
   $('#homeButton').addEventListener('click', async () => { await saveCurrentNote(); await loadYears(); showView('home'); });
   $('[data-view="home"]').addEventListener('click', async () => { await saveCurrentNote(); await loadYears(); showView('home'); });
   $('[data-view="today"]').addEventListener('click', async () => { const now = new Date(); state.currentYear = now.getFullYear(); await openEditor(dateKey(now), 'yearOverview'); });
+  $('[data-view="memos"]').addEventListener('click', async () => { await saveCurrentNote(); showView('memos'); await loadMemos(); });
   $('[data-view="search"]').addEventListener('click', async () => { await saveCurrentNote(); showView('search'); $('#searchInput').focus(); });
   $('[data-view="favorites"]').addEventListener('click', async () => { await saveCurrentNote(); showView('favorites'); await loadFavorites(); });
   $('[data-view="stats"]').addEventListener('click', async () => { await saveCurrentNote(); await loadYears(); showView('stats'); await loadStats(); });
@@ -1340,6 +1461,24 @@ function bindEvents() {
   });
   $$('[data-close-dialog]').forEach(button => button.addEventListener('click', () => {
     $(`#${button.dataset.closeDialog}`).close();
+  }));
+  // ── 备忘录事件 ──
+  $('#addMemoButton').addEventListener('click', () => openMemoDialog());
+  $('#memoForm').addEventListener('submit', saveMemoFromDialog);
+  $('#memoSearchForm').addEventListener('submit', event => event.preventDefault());
+  $('#memoSearchInput').addEventListener('input', event => {
+    state.memoQuery = event.target.value;
+    renderMemos();
+  });
+  $('#clearMemoSearch').addEventListener('click', () => {
+    $('#memoSearchInput').value = '';
+    state.memoQuery = '';
+    renderMemos();
+    $('#memoSearchInput').focus();
+  });
+  $$('.memo-filter').forEach(button => button.addEventListener('click', () => {
+    state.memoFilter = button.dataset.filter;
+    renderMemos();
   }));
   window.addEventListener('beforeunload', async (e) => {
     if (state.dirty) {

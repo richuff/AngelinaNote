@@ -17,6 +17,7 @@
       <nav class="side-nav" aria-label="主导航">
         <button class="nav-item active" data-view="home" title="年度书架"><i data-lucide="layout-grid"></i><span>年度书架</span></button>
         <button class="nav-item" data-view="today" title="今天"><i data-lucide="calendar-heart"></i><span>今天</span></button>
+        <button class="nav-item" data-view="memos" title="备忘录"><i data-lucide="clipboard-list"></i><span>备忘录</span></button>
         <button class="nav-item" data-view="search" title="全文搜索"><i data-lucide="search"></i><span>全文搜索</span></button>
         <button class="nav-item" data-view="favorites" title="我的收藏"><i data-lucide="star"></i><span>我的收藏</span></button>
         <button class="nav-item" data-view="stats" title="年度统计"><i data-lucide="chart-no-axes-column-increasing"></i><span>年度统计</span></button>
@@ -43,6 +44,26 @@
           <div><p class="eyebrow">MY YEARS, MY STORIES</p><h1>年度记事本</h1><p class="page-description">每一年都是一本独一无二的故事集。</p></div>
         </header>
         <div class="year-timeline" id="yearGrid"></div>
+      </section>
+
+      <section id="memosView" class="view archive-view memos-view">
+        <img class="page-decoration memo-decoration" src="../Angelina/UI素材/27.png" alt="">
+        <header class="page-header">
+          <div><p class="eyebrow">QUICK MEMOS</p><h1>备忘录</h1><p class="page-description">不挑日子的随手速记，把待办与灵感都留在这里。</p></div>
+          <button id="addMemoButton" class="primary-button"><i data-lucide="plus"></i><span>新建备忘</span></button>
+        </header>
+        <form id="memoSearchForm" class="search-bar memo-search-bar">
+          <i data-lucide="search"></i>
+          <input id="memoSearchInput" type="search" placeholder="搜索标题或内容" autocomplete="off">
+          <button id="clearMemoSearch" class="icon-button" type="button" title="清空搜索" aria-label="清空搜索"><i data-lucide="x"></i></button>
+        </form>
+        <div class="memo-filters" id="memoFilters">
+          <button class="memo-filter active" data-filter="all" type="button">全部</button>
+          <button class="memo-filter" data-filter="active" type="button">未完成</button>
+          <button class="memo-filter" data-filter="done" type="button">已完成</button>
+        </div>
+        <div class="journal-heading"><div><p class="eyebrow">PINNED & RECENT</p><h2>备忘清单</h2></div><span id="memoResultCount"></span></div>
+        <div id="memoList" class="memo-list archive-results"></div>
       </section>
 
       <section id="searchView" class="view archive-view">
@@ -265,6 +286,20 @@
       <label>标签名称<input id="tagNameInput" maxlength="16" placeholder="工作、旅行、灵感……" required></label>
       <label>标签颜色<div class="color-options" id="tagColors"></div></label>
       <div class="dialog-actions"><button type="button" data-close-dialog="tagDialog" class="secondary-button">取消</button><button id="confirmTag" type="submit" class="primary-button">创建标签</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="memoDialog">
+    <form method="dialog" id="memoForm">
+      <div class="dialog-head"><div><p class="eyebrow">QUICK MEMO</p><h2 id="memoDialogTitle">新建备忘</h2></div><button type="button" data-close-dialog="memoDialog" class="icon-button" title="关闭"><i data-lucide="x"></i></button></div>
+      <input id="memoId" type="hidden">
+      <label>标题<input id="memoTitleInput" maxlength="80" placeholder="给这条备忘起个名字……"></label>
+      <label>内容<textarea id="memoContentInput" rows="6" placeholder="写下待办、灵感或任何想记住的事……"></textarea></label>
+      <div class="memo-dialog-options">
+        <label class="memo-check"><input id="memoDoneInput" type="checkbox"><span>标记为已完成</span></label>
+        <label class="memo-check"><input id="memoPinnedInput" type="checkbox"><span>置顶这条备忘</span></label>
+      </div>
+      <div class="dialog-actions"><button type="button" data-close-dialog="memoDialog" class="secondary-button">取消</button><button type="submit" class="primary-button">保存备忘</button></div>
     </form>
   </dialog>
 

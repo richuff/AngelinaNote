@@ -158,6 +158,15 @@ function initDatabase() {
       is_favorite INTEGER NOT NULL DEFAULT 0,
       snapshot_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS memos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL DEFAULT '',
+      done INTEGER NOT NULL DEFAULT 0,
+      pinned INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
   const yearColumns = db.prepare('PRAGMA table_info(years)').all();
   if (!yearColumns.some(column => column.name === 'cover_image')) {
@@ -252,6 +261,7 @@ function createTray() {
   tray.setToolTip('Angelina Note');
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '今日日志', click: () => showMainWindow('today') },
+    { label: '备忘录', click: () => showMainWindow('memos') },
     { label: '年度书架', click: () => showMainWindow('home') },
     { label: '全文搜索', click: () => showMainWindow('search') },
     { label: '我的收藏', click: () => showMainWindow('favorites') },
@@ -633,7 +643,8 @@ function registerIpc() {
       notes: db.prepare('SELECT * FROM notes ORDER BY note_date').all(),
       tags: db.prepare('SELECT * FROM tags ORDER BY id').all(),
       noteTags: db.prepare('SELECT * FROM note_tags ORDER BY note_date, tag_id').all(),
-      stickers: db.prepare('SELECT * FROM stickers ORDER BY note_date, z_index').all()
+      stickers: db.prepare('SELECT * FROM stickers ORDER BY note_date, z_index').all(),
+      memos: db.prepare('SELECT * FROM memos ORDER BY id').all()
     };
     fs.writeFileSync(result.filePath, JSON.stringify(backup, null, 2), 'utf8');
     return result.filePath;
@@ -655,6 +666,7 @@ function registerIpc() {
     db.transaction(() => {
       db.prepare('DELETE FROM note_tags').run();
       db.prepare('DELETE FROM stickers').run();
+      db.prepare('DELETE FROM memos').run();
       db.prepare('DELETE FROM notes').run();
       db.prepare('DELETE FROM tags').run();
       db.prepare('DELETE FROM years').run();
@@ -668,6 +680,11 @@ function registerIpc() {
       backup.noteTags.forEach(item => addLink.run(item.note_date, item.tag_id));
       const addSticker = db.prepare('INSERT INTO stickers (id, note_date, asset, x, y, rotation, scale, opacity, z_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
       backup.stickers.forEach(item => addSticker.run(item.id, item.note_date, item.asset, item.x, item.y, item.rotation, item.scale, item.opacity ?? 1, item.z_index));
+      const addMemo = db.prepare('INSERT INTO memos (id, title, content, done, pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      (Array.isArray(backup.memos) ? backup.memos : []).forEach(item => addMemo.run(
+        item.id, item.title || '', item.content || '', item.done ? 1 : 0, item.pinned ? 1 : 0,
+        item.created_at || new Date().toISOString(), item.updated_at || new Date().toISOString()
+      ));
     })();
     return result.filePaths[0];
   });
@@ -683,6 +700,35 @@ function registerIpc() {
       db.prepare('DELETE FROM tags WHERE id = ?').run(tagId);
     })();
     return true;
+  });
+
+  // ── 备忘录 ──────────────────────────────────────────────────────────────
+  ipcMain.handle('memos:list', () => db.prepare(`
+    SELECT * FROM memos ORDER BY pinned DESC, done ASC, updated_at DESC, id DESC
+  `).all());
+  ipcMain.handle('memos:save', (_, memo) => {
+    const now = new Date().toISOString();
+    const title = String(memo.title ?? '').trim();
+    const content = String(memo.content ?? '');
+    if (memo.id) {
+      db.prepare(`UPDATE memos SET title = ?, content = ?, done = ?, pinned = ?, updated_at = ? WHERE id = ?`)
+        .run(title, content, memo.done ? 1 : 0, memo.pinned ? 1 : 0, now, memo.id);
+      return db.prepare('SELECT * FROM memos WHERE id = ?').get(memo.id);
+    }
+    const result = db.prepare(`INSERT INTO memos (title, content, done, pinned, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(title, content, memo.done ? 1 : 0, memo.pinned ? 1 : 0, now, now);
+    return db.prepare('SELECT * FROM memos WHERE id = ?').get(result.lastInsertRowid);
+  });
+  ipcMain.handle('memos:delete', (_, id) => {
+    db.prepare('DELETE FROM memos WHERE id = ?').run(id);
+    return true;
+  });
+  ipcMain.handle('memos:toggle', (_, { id, field }) => {
+    if (!['done', 'pinned'].includes(field)) throw new Error('无效的备忘录字段');
+    db.prepare(`UPDATE memos SET ${field} = CASE ${field} WHEN 1 THEN 0 ELSE 1 END, updated_at = ? WHERE id = ?`)
+      .run(new Date().toISOString(), id);
+    return db.prepare('SELECT * FROM memos WHERE id = ?').get(id);
   });
 }
 
