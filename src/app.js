@@ -410,9 +410,10 @@ function renderMemos() {
   }
   container.innerHTML = visible.map(memo => {
     const body = memo.content.trim();
-    return `<article class="memo-card${memo.done ? ' is-done' : ''}${memo.pinned ? ' is-pinned' : ''}" data-id="${memo.id}">
+    const longTerm = Boolean(memo.long_term);
+    return `<article class="memo-card${memo.done ? ' is-done' : ''}${memo.pinned ? ' is-pinned' : ''}${longTerm ? ' is-long-term' : ''}" data-id="${memo.id}">
       <div class="memo-card-top">
-        <button class="memo-check-button" data-action="toggle-done" title="${memo.done ? '标记为未完成' : '标记为已完成'}" aria-label="切换完成状态"><i data-lucide="check"></i></button>
+        ${longTerm ? '<span class="memo-long-term-badge" title="长期备忘">长期</span>' : `<button class="memo-check-button" data-action="toggle-done" title="${memo.done ? '标记为未完成' : '标记为已完成'}" aria-label="切换完成状态"><i data-lucide="check"></i></button>`}
         <h3 class="memo-card-title">${escapeHtml(memo.title || '未命名备忘')}</h3>
       </div>
       <p class="memo-card-body${body ? '' : ' memo-card-empty-body'}">${escapeHtml(body || '（暂无内容）')}</p>
@@ -464,13 +465,23 @@ async function handleMemoAction(action, id) {
   }
 }
 
+function syncLongTermOptions() {
+  const longTerm = $('#memoLongTermInput').checked;
+  const doneInput = $('#memoDoneInput');
+  doneInput.disabled = longTerm;
+  if (longTerm) doneInput.checked = false;
+  doneInput.closest('label').classList.toggle('is-disabled', longTerm);
+}
+
 function openMemoDialog(memo = null) {
   $('#memoForm').reset();
   $('#memoId').value = memo ? String(memo.id) : '';
   $('#memoTitleInput').value = memo ? memo.title : '';
   $('#memoContentInput').value = memo ? memo.content : '';
+  $('#memoLongTermInput').checked = memo ? Boolean(memo.long_term) : false;
   $('#memoDoneInput').checked = memo ? Boolean(memo.done) : false;
   $('#memoPinnedInput').checked = memo ? Boolean(memo.pinned) : false;
+  syncLongTermOptions();
   $('#memoDialogTitle').textContent = memo ? '编辑备忘' : '新建备忘';
   $('#memoDialog').showModal();
   refreshIcons();
@@ -480,10 +491,12 @@ function openMemoDialog(memo = null) {
 async function saveMemoFromDialog(event) {
   event.preventDefault();
   const id = $('#memoId').value;
+  const longTerm = $('#memoLongTermInput').checked;
   const payload = {
     title: $('#memoTitleInput').value.trim(),
     content: $('#memoContentInput').value,
-    done: $('#memoDoneInput').checked,
+    longTerm,
+    done: longTerm ? false : $('#memoDoneInput').checked,
     pinned: $('#memoPinnedInput').checked
   };
   if (!payload.title && !payload.content.trim()) {
@@ -1465,6 +1478,7 @@ function bindEvents() {
   // ── 备忘录事件 ──
   $('#addMemoButton').addEventListener('click', () => openMemoDialog());
   $('#memoForm').addEventListener('submit', saveMemoFromDialog);
+  $('#memoLongTermInput').addEventListener('change', syncLongTermOptions);
   $('#memoSearchForm').addEventListener('submit', event => event.preventDefault());
   $('#memoSearchInput').addEventListener('input', event => {
     state.memoQuery = event.target.value;

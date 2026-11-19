@@ -164,6 +164,7 @@ function initDatabase() {
       content TEXT NOT NULL DEFAULT '',
       done INTEGER NOT NULL DEFAULT 0,
       pinned INTEGER NOT NULL DEFAULT 0,
+      long_term INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -185,6 +186,10 @@ function initDatabase() {
   const stickerColumns = db.prepare('PRAGMA table_info(stickers)').all();
   if (!stickerColumns.some(column => column.name === 'opacity')) {
     db.exec('ALTER TABLE stickers ADD COLUMN opacity REAL NOT NULL DEFAULT 1');
+  }
+  const memoColumns = db.prepare('PRAGMA table_info(memos)').all();
+  if (!memoColumns.some(column => column.name === 'long_term')) {
+    db.exec('ALTER TABLE memos ADD COLUMN long_term INTEGER NOT NULL DEFAULT 0');
   }
   db.prepare("DELETE FROM notes WHERE deleted_at IS NOT NULL AND deleted_at < datetime('now', '-30 days')").run();
   db.exec(`DELETE FROM note_history WHERE id NOT IN (
@@ -694,11 +699,14 @@ function registerIpc() {
       backup.noteTags.forEach(item => addLink.run(item.note_date, item.tag_id));
       const addSticker = db.prepare('INSERT INTO stickers (id, note_date, asset, x, y, rotation, scale, opacity, z_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
       backup.stickers.forEach(item => addSticker.run(item.id, item.note_date, item.asset, item.x, item.y, item.rotation, item.scale, item.opacity ?? 1, item.z_index));
-      const addMemo = db.prepare('INSERT INTO memos (id, title, content, done, pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-      (Array.isArray(backup.memos) ? backup.memos : []).forEach(item => addMemo.run(
-        item.id, item.title || '', item.content || '', item.done ? 1 : 0, item.pinned ? 1 : 0,
-        item.created_at || new Date().toISOString(), item.updated_at || new Date().toISOString()
-      ));
+      const addMemo = db.prepare('INSERT INTO memos (id, title, content, done, pinned, long_term, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+      (Array.isArray(backup.memos) ? backup.memos : []).forEach(item => {
+        const longTerm = item.long_term ? 1 : 0;
+        addMemo.run(
+          item.id, item.title || '', item.content || '', longTerm ? 0 : (item.done ? 1 : 0), item.pinned ? 1 : 0, longTerm,
+          item.created_at || new Date().toISOString(), item.updated_at || new Date().toISOString()
+        );
+      });
     })();
     return result.filePaths[0];
   });
@@ -718,20 +726,23 @@ function registerIpc() {
 
   // ── 备忘录 ──────────────────────────────────────────────────────────────
   ipcMain.handle('memos:list', () => db.prepare(`
-    SELECT * FROM memos ORDER BY pinned DESC, done ASC, updated_at DESC, id DESC
+    SELECT * FROM memos ORDER BY long_term DESC, pinned DESC, done ASC, updated_at DESC, id DESC
   `).all());
   ipcMain.handle('memos:save', (_, memo) => {
     const now = new Date().toISOString();
     const title = String(memo.title ?? '').trim();
     const content = String(memo.content ?? '');
+    // 长期备忘没有完成状态，强制 done=0。
+    const longTerm = memo.longTerm ? 1 : 0;
+    const done = longTerm ? 0 : (memo.done ? 1 : 0);
     if (memo.id) {
-      db.prepare(`UPDATE memos SET title = ?, content = ?, done = ?, pinned = ?, updated_at = ? WHERE id = ?`)
-        .run(title, content, memo.done ? 1 : 0, memo.pinned ? 1 : 0, now, memo.id);
+      db.prepare(`UPDATE memos SET title = ?, content = ?, done = ?, pinned = ?, long_term = ?, updated_at = ? WHERE id = ?`)
+        .run(title, content, done, memo.pinned ? 1 : 0, longTerm, now, memo.id);
       return db.prepare('SELECT * FROM memos WHERE id = ?').get(memo.id);
     }
-    const result = db.prepare(`INSERT INTO memos (title, content, done, pinned, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)`)
-      .run(title, content, memo.done ? 1 : 0, memo.pinned ? 1 : 0, now, now);
+    const result = db.prepare(`INSERT INTO memos (title, content, done, pinned, long_term, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run(title, content, done, memo.pinned ? 1 : 0, longTerm, now, now);
     return db.prepare('SELECT * FROM memos WHERE id = ?').get(result.lastInsertRowid);
   });
   ipcMain.handle('memos:delete', (_, id) => {
@@ -740,6 +751,9 @@ function registerIpc() {
   });
   ipcMain.handle('memos:toggle', (_, { id, field }) => {
     if (!['done', 'pinned'].includes(field)) throw new Error('无效的备忘录字段');
+    // 长期备忘不支持完成状态，拒绝切换 done。
+    const memo = db.prepare('SELECT long_term FROM memos WHERE id = ?').get(id);
+    if (field === 'done' && memo?.long_term) return db.prepare('SELECT * FROM memos WHERE id = ?').get(id);
     db.prepare(`UPDATE memos SET ${field} = CASE ${field} WHEN 1 THEN 0 ELSE 1 END, updated_at = ? WHERE id = ?`)
       .run(new Date().toISOString(), id);
     return db.prepare('SELECT * FROM memos WHERE id = ?').get(id);

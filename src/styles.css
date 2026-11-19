@@ -550,6 +550,8 @@ html[data-font] .page-header h1, html[data-font] .year-header h1, html[data-font
 .memo-card { position: relative; display: flex; flex-direction: column; gap: 12px; min-height: 148px; padding: 20px 20px 16px; border: 1px solid #cfcfc8; border-radius: 7px; background: var(--paper); box-shadow: 4px 4px 0 rgba(31,111,189,.1); transition: transform .16s ease, border-color .16s ease; }
 .memo-card:hover { transform: translateY(-3px); border-color: var(--blue); }
 .memo-card.is-pinned { border-color: var(--coral); box-shadow: 4px 4px 0 rgba(233,101,96,.16); }
+.memo-card.is-long-term { border-color: var(--blue); box-shadow: 4px 4px 0 rgba(31,111,189,.2); background: linear-gradient(180deg, #fbfcff 0%, var(--paper) 60%); }
+.memo-long-term-badge { display: grid; flex: 0 0 auto; place-items: center; min-width: 34px; height: 22px; margin-top: 2px; padding: 0 5px; border-radius: 5px; background: var(--blue); color: white; font-size: 10px; font-weight: 700; letter-spacing: .5px; }
 .memo-card.is-done { opacity: .68; }
 .memo-card.is-done .memo-card-title { text-decoration: line-through; text-decoration-color: var(--muted); }
 .memo-card-top { display: flex; align-items: flex-start; gap: 12px; }
@@ -582,6 +584,7 @@ dialog#memoDialog textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 
 .memo-dialog-options { display: flex; flex-wrap: wrap; gap: 18px; }
 dialog#memoDialog .memo-check { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--ink); cursor: pointer; }
 dialog#memoDialog .memo-check input { width: 16px; height: 16px; accent-color: var(--blue); }
+dialog#memoDialog .memo-check.is-disabled { opacity: .45; cursor: not-allowed; }
 
 @media (max-width: 1150px) {
   :root { --sidebar: 210px; }
